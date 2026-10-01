@@ -1,6 +1,6 @@
 # A03 — Monolith with Redis cache and API Gateway proxy (2 app instances)
 services:
-  api-gateway:
+  app:
     image: ${BACKEND_IMAGE_DIGEST}
     environment:
       APP_ROLE: api-gateway

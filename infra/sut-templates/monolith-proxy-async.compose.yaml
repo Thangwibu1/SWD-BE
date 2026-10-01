@@ -1,6 +1,6 @@
 # A04 — Monolith with Redis cache, API Gateway proxy, and Async Notification
 services:
-  api-gateway:
+  app:
     image: ${BACKEND_IMAGE_DIGEST}
     environment:
       APP_ROLE: api-gateway
