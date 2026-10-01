@@ -13,6 +13,7 @@ import { connectRedis, RedisCartStore } from '../../monolith/redis-cache.js';
 import { MemoryCartStore } from '../../monolith/cart-module.js';
 import type { CartStore } from '../../monolith/cart-module.js';
 import { createCartModule } from '../../monolith/cart-module.js';
+import { currentRequestId } from '../../shared/observability/request-context.js';
 
 const REDIS_CACHE_ARCHITECTURES = new Set(['A06', 'A07', 'A08']);
 
@@ -36,8 +37,9 @@ export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logge
     async reserveStock(_tx, items) {
       const res = await fetch(`${INVENTORY_URL}/internal/reserve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': currentRequestId() || '' },
         body: JSON.stringify({ items }),
+        signal: AbortSignal.timeout(3000),
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as any;
@@ -47,16 +49,18 @@ export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logge
     async releaseStock(_tx, items) {
       const res = await fetch(`${INVENTORY_URL}/internal/release`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': currentRequestId() || '' },
         body: JSON.stringify({ items }),
+        signal: AbortSignal.timeout(3000),
       });
       if (!res.ok) throw new DomainError('DEPENDENCY_UNAVAILABLE');
     },
     async commitStock(_tx, items) {
       const res = await fetch(`${INVENTORY_URL}/internal/commit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': currentRequestId() || '' },
         body: JSON.stringify({ items }),
+        signal: AbortSignal.timeout(3000),
       });
       if (!res.ok) throw new DomainError('DEPENDENCY_UNAVAILABLE');
     },
@@ -67,8 +71,9 @@ export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logge
     async charge(request: PaymentRequest): Promise<PaymentResult> {
       const res = await fetch(`${PAYMENT_URL}/payments/mock`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': currentRequestId() || '' },
         body: JSON.stringify(request),
+        signal: AbortSignal.timeout(3000),
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as any;
