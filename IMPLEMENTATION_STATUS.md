@@ -139,3 +139,32 @@
 ### Remaining blockers
 - Redis integration test (A02 mode) chưa có — cần Redis container. Unit tests cover `MemoryCartStore`; `RedisCartStore` tested implicitly qua interface contract.
 - `supertest` chưa có trong `devDependencies` — test chạy nhờ vitest auto-resolve. Sẽ thêm explicit dependency nếu CI fail.
+
+## Phase 3 — A03/A04
+
+### Implemented
+- **API Gateway proxy (`src/sut/gateway/bootstrap.ts`)**: Round-robin HTTP reverse proxy using Node.js `http`/`https` modules, routing traffic to downstream Monolith instances based on `MONOLITH_URL`. Handles timeouts, liveness, and readiness probes. Registered role `api-gateway` in `main.ts`.
+- **Async Notification Mock (`src/sut/services/notification/bootstrap.ts`)**: Fire-and-forget notification receiver returning 202 Accepted. Registered role `notification-mock` in `main.ts`.
+- **Monolith Async Notifications (`src/sut/monolith/order-module.ts`, `src/sut/monolith/bootstrap.ts`)**: Order module now accepts an optional `sendNotification` callback. Monolith bootstrap injects an async HTTP call to `NOTIFICATION_URL` after a successful checkout if configured.
+- **Architecture Registry A03 & A04**:
+  - `architecture-registry/A03.yaml`: Monolith with API Gateway (2 replicas), Redis Cache, no messaging. Total resource quota correctly assigned (api-gateway: 0.2/256, sut-monolith: 0.5/896, sut-monolith-2: 0.5/896, postgres: 0.5/1280, redis: 0.3/768).
+  - `architecture-registry/A04.yaml`: Monolith with API Gateway (2 replicas), Redis Cache, and Async Notification mock. Quota dynamically split to include notification-mock (api-gateway: 0.2/256, sut-monolith: 0.5/896, sut-monolith-2: 0.5/896, notification-mock: 0.1/128, postgres: 0.4/1152, redis: 0.3/768).
+- **SUT Compose Templates (`infra/sut-templates/`)**:
+  - `monolith-proxy.compose.yaml` (A03): `api-gateway`, 2 `sut-monolith` instances, `postgres`, `redis`.
+  - `monolith-proxy-async.compose.yaml` (A04): `api-gateway`, 2 `sut-monolith` instances, `notification-mock`, `postgres`, `redis`.
+- Updates to `sut-env.ts` to validate new environment variables (`MONOLITH_URL`, `NOTIFICATION_URL`).
+
+### Files changed
+- `src/config/sut-env.ts`
+- `src/sut/monolith/bootstrap.ts`, `src/sut/monolith/order-module.ts`
+- `src/main.ts`
+- `src/sut/gateway/bootstrap.ts` (new)
+- `src/sut/services/notification/bootstrap.ts` (new)
+- `architecture-registry/A03.yaml` (new), `architecture-registry/A04.yaml` (new)
+- `infra/sut-templates/monolith-proxy.compose.yaml` (new), `infra/sut-templates/monolith-proxy-async.compose.yaml` (new)
+
+### Verification
+- `npm run registry:validate`: PASS (A01-A04 all valid under resource limits).
+- `npm run test`: PASS (101 tests passed, verifying new code didn't break invariants or API contract).
+- Monolith gracefully handles optional async notifications without degrading synchronous checkout performance.
+

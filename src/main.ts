@@ -24,6 +24,16 @@ async function bootstrapMonolith(config: AppConfig, logger: Logger): Promise<voi
   await boot(config, logger);
 }
 
+async function bootstrapGateway(config: AppConfig, logger: Logger): Promise<void> {
+  const { bootstrapGateway: boot } = await import('./sut/gateway/bootstrap.js');
+  await boot(config, logger);
+}
+
+async function bootstrapNotificationMock(config: AppConfig, logger: Logger): Promise<void> {
+  const { bootstrapNotificationMock: boot } = await import('./sut/services/notification/bootstrap.js');
+  await boot(config, logger);
+}
+
 /**
  * Role table. Roles are registered here as their phase lands; an unknown or
  * not-yet-registered role fails fast instead of silently starting nothing.
@@ -31,6 +41,8 @@ async function bootstrapMonolith(config: AppConfig, logger: Logger): Promise<voi
 const BOOTSTRAPS: Partial<Record<AppRole, Bootstrap>> = {
   'controller-api': bootstrapControllerApi,
   'sut-monolith': bootstrapMonolith,
+  'api-gateway': bootstrapGateway,
+  'notification-mock': bootstrapNotificationMock,
 };
 
 export async function main(): Promise<void> {

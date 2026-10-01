@@ -27,14 +27,17 @@ import type { InventoryTxOps } from './inventory-module.js';
  * This is the key structural difference vs REST (distributed calls) and
  * event-driven (saga with compensation).
  */
+export type NotificationSender = (orderId: string) => void;
+
 export function createOrderModule(
   db: Database,
   inventoryTx: InventoryTxOps,
   payments: PaymentApi,
+  sendNotification?: NotificationSender,
 ): OrderApi {
   return {
     async checkout(idempotencyKey, request): Promise<CheckoutResult> {
-      return checkoutInTransaction(db, inventoryTx, payments, idempotencyKey, request);
+      return checkoutInTransaction(db, inventoryTx, payments, idempotencyKey, request, sendNotification);
     },
 
     async get(orderId): Promise<Order> {
@@ -79,6 +82,7 @@ async function checkoutInTransaction(
   payments: PaymentApi,
   idempotencyKey: string,
   request: CheckoutRequest,
+  sendNotification?: NotificationSender,
 ): Promise<CheckoutResult> {
   assertUniqueItems(request.items);
   if (request.items.length > MAX_CHECKOUT_LINES) {
@@ -163,6 +167,10 @@ async function checkoutInTransaction(
     if (paymentResult.status === 'PAID') {
       await tx.query('order.confirm', `UPDATE orders SET status = 'CONFIRMED', payment_status = 'PAID', updated_at = now() WHERE id = $1`, [orderId]);
       await inventoryTx.commitStock(tx, request.items);
+      // Fire-and-forget notification (A04)
+      if (sendNotification && !existing?.rows[0]) {
+        sendNotification(orderId);
+      }
     } else {
       await tx.query('order.fail', `UPDATE orders SET status = 'FAILED', payment_status = 'FAILED', updated_at = now() WHERE id = $1`, [orderId]);
       await inventoryTx.releaseStock(tx, request.items);

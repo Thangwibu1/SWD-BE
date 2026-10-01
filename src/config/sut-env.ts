@@ -16,6 +16,10 @@ const sutEnvSchema = z.object({
   SERVICE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   /** DB connection pool size per SUT process. */
   DB_POOL_MAX: z.coerce.number().int().positive().default(10),
+  /** Comma-separated list of downstream monolith URLs for the API gateway to proxy to. */
+  MONOLITH_URL: z.string().optional(),
+  /** URL of the async notification mock service. */
+  NOTIFICATION_URL: z.string().optional(),
 });
 
 export type SutConfig = z.infer<typeof sutEnvSchema>;

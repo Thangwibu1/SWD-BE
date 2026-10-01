@@ -1,0 +1,37 @@
+id: A04
+family: MODULAR_MONOLITH
+composeTemplate: infra/sut-templates/monolith-proxy-async.compose.yaml
+cache:
+  enabled: true
+  targets: [product, cart]
+messaging:
+  enabled: false
+  broker: NONE
+scalingProfile: DUAL_APP_PROXY_ASYNC
+communication: IN_PROCESS
+resourceProfile: monolith_proxy_async_v1
+allowedRoles:
+  - api-gateway
+  - sut-monolith
+  - notification-mock
+  - postgres
+  - redis
+resources:
+  api-gateway:
+    cpus: 0.2
+    memoryMiB: 256
+  sut-monolith:
+    cpus: 0.5
+    memoryMiB: 896
+  sut-monolith-2:
+    cpus: 0.5
+    memoryMiB: 896
+  notification-mock:
+    cpus: 0.1
+    memoryMiB: 128
+  postgres:
+    cpus: 0.4
+    memoryMiB: 1152
+  redis:
+    cpus: 0.3
+    memoryMiB: 768

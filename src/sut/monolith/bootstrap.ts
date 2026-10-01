@@ -55,12 +55,25 @@ export async function bootstrapMonolith(_appConfig: AppConfig, logger: Logger): 
   }
 
   // Wire modules
+  let sendNotification: ((orderId: string) => void) | undefined;
+  if (config.NOTIFICATION_URL) {
+    sendNotification = (orderId: string) => {
+      fetch(`${config.NOTIFICATION_URL}/notifications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventType: 'order.completed', orderId }),
+      }).catch((err: unknown) => {
+        logger.warn({ err, orderId }, 'Failed to send async notification');
+      });
+    };
+  }
+
   const auth = createAuthModule(db);
   const catalog = createCatalogModule(db, productCache);
   const inventory = createInventoryModule(db);
   const cart = createCartModule(cartStore);
   const payments = createPaymentModule();
-  const orders = createOrderModule(db, inventory, payments);
+  const orders = createOrderModule(db, inventory, payments, sendNotification);
 
   const apis: SutApis = { auth, catalog, inventory, cart, orders, payments };
 
