@@ -20,6 +20,11 @@ const sutEnvSchema = z.object({
   MONOLITH_URL: z.string().optional(),
   /** URL of the async notification mock service. */
   NOTIFICATION_URL: z.string().optional(),
+  USER_URL: z.string().optional(),
+  CATALOG_URL: z.string().optional(),
+  ORDER_URL: z.string().optional(),
+  PAYMENT_URL: z.string().optional(),
+  INVENTORY_URL: z.string().optional(),
 });
 
 export type SutConfig = z.infer<typeof sutEnvSchema>;

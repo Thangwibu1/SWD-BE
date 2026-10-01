@@ -1,0 +1,53 @@
+id: A07
+family: REST_MICROSERVICES
+composeTemplate: infra/sut-templates/rest-catalog-scaled.compose.yaml
+cache:
+  enabled: true
+  targets: [product, cart]
+messaging:
+  enabled: false
+  broker: NONE
+scalingProfile: CATALOG_SCALED
+communication: HTTP_JSON
+resourceProfile: rest_catalog_scaled_v1
+allowedRoles:
+  - api-gateway
+  - user-service
+  - catalog-service
+  - inventory-service
+  - order-service
+  - payment-mock
+  - notification-mock
+  - postgres
+  - redis
+resources:
+  api-gateway:
+    cpus: 0.2
+    memoryMiB: 256
+  user-service:
+    cpus: 0.1
+    memoryMiB: 128
+  catalog-service:
+    cpus: 0.15
+    memoryMiB: 256
+  catalog-service-2:
+    cpus: 0.15
+    memoryMiB: 256
+  inventory-service:
+    cpus: 0.2
+    memoryMiB: 320
+  order-service:
+    cpus: 0.3
+    memoryMiB: 384
+  payment-mock:
+    cpus: 0.1
+    memoryMiB: 128
+  notification-mock:
+    cpus: 0.1
+    memoryMiB: 128
+  postgres:
+    cpus: 0.5
+    memoryMiB: 1536
+  redis:
+    cpus: 0.2
+    memoryMiB: 704

@@ -1,0 +1,45 @@
+id: A05
+family: REST_MICROSERVICES
+composeTemplate: infra/sut-templates/rest.compose.yaml
+cache:
+  enabled: false
+messaging:
+  enabled: false
+  broker: NONE
+scalingProfile: ONE_PER_SERVICE
+communication: HTTP_JSON
+resourceProfile: rest_v1
+allowedRoles:
+  - api-gateway
+  - user-service
+  - catalog-service
+  - inventory-service
+  - order-service
+  - payment-mock
+  - notification-mock
+  - postgres
+resources:
+  api-gateway:
+    cpus: 0.2
+    memoryMiB: 256
+  user-service:
+    cpus: 0.1
+    memoryMiB: 256
+  catalog-service:
+    cpus: 0.2
+    memoryMiB: 384
+  inventory-service:
+    cpus: 0.2
+    memoryMiB: 384
+  order-service:
+    cpus: 0.3
+    memoryMiB: 512
+  payment-mock:
+    cpus: 0.1
+    memoryMiB: 128
+  notification-mock:
+    cpus: 0.1
+    memoryMiB: 128
+  postgres:
+    cpus: 0.8
+    memoryMiB: 2048

@@ -168,3 +168,14 @@
 - `npm run test`: PASS (101 tests passed, verifying new code didn't break invariants or API contract).
 - Monolith gracefully handles optional async notifications without degrading synchronous checkout performance.
 
+
+
+## Phase 4 — A05–A08
+
+### Implemented
+- [x] Phân tách thành các REST microservices d?c l?p: \user-service\, \catalog-service\, \inventory-service\, \order-service\, \payment-mock\.
+- [x] \order-service\ orchestrate qua HTTP fetch t?i \inventory-service\ và \payment-mock\ thay vì g?i method in-process.
+- [x] Kh?i t?o các file Compose cho \A05\, \A06\ (REST_CACHED), \A07\ (Catalog scaled), \A08\ (Order scaled).
+- [x] Gateway load balancer h? tr? d?nh tuy?n theo path (\/auth\, \/products\, \/orders\, v.v.) và chia t?i round-robin cho nhi?u replica (A07/A08).
+- [x] Toàn b? code compile pass và vu?t qua strict validation c?a Registry Validator (RAM/CPU budgets).
+

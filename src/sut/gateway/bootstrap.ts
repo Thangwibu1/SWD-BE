@@ -14,17 +14,36 @@ export async function bootstrapGateway(_appConfig: AppConfig, logger: Logger): P
 
   const app = createSutApp(logger);
 
-  // Parse downstream targets
-  const targets = (config.MONOLITH_URL || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const isMicroservices = archId >= 'A05' && archId <= 'A08';
 
-  if (targets.length === 0) {
-    throw new Error('MONOLITH_URL must be configured for the API gateway to route traffic');
+  let targets: string[] = [];
+  const microserviceTargets: { user: string[]; catalog: string[]; order: string[]; payment: string[] } = {
+    user: [],
+    catalog: [],
+    order: [],
+    payment: [],
+  };
+
+  if (!isMicroservices) {
+    targets = (config.MONOLITH_URL || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (targets.length === 0) {
+      throw new Error('MONOLITH_URL must be configured for the API gateway to route traffic');
+    }
+    logger.info({ targets }, 'Gateway downstream targets (Monolith proxy)');
+  } else {
+    const parseUrls = (envVar: string | undefined, defaultUrl: string) =>
+      (envVar || defaultUrl).split(',').map((s) => s.trim()).filter(Boolean);
+
+    microserviceTargets.user = parseUrls(config.USER_URL, 'http://user-service:3000');
+    microserviceTargets.catalog = parseUrls(config.CATALOG_URL, 'http://catalog-service:3000');
+    microserviceTargets.order = parseUrls(config.ORDER_URL, 'http://order-service:3000');
+    microserviceTargets.payment = parseUrls(config.PAYMENT_URL, 'http://payment-mock:3000');
+    logger.info('Gateway using path-based routing (Microservices)');
   }
-
-  logger.info({ targets }, 'Gateway downstream targets');
 
   // Liveness and Readiness
   app.get('/health', (_req, res) => {
@@ -38,11 +57,40 @@ export async function bootstrapGateway(_appConfig: AppConfig, logger: Logger): P
 
   // Simple round-robin state
   let currentTargetIndex = 0;
+  const currentMicroserviceIndex = {
+    user: 0,
+    catalog: 0,
+    order: 0,
+    payment: 0,
+  };
 
   // Proxy middleware
   app.use((req: Request, res: Response) => {
-    const targetUrlString = targets[currentTargetIndex];
-    currentTargetIndex = (currentTargetIndex + 1) % targets.length;
+    let targetUrlString = '';
+    
+    if (isMicroservices) {
+      if (req.originalUrl.startsWith('/auth')) {
+        targetUrlString = microserviceTargets.user[currentMicroserviceIndex.user]!;
+        currentMicroserviceIndex.user = (currentMicroserviceIndex.user + 1) % microserviceTargets.user.length;
+      } else if (req.originalUrl.startsWith('/products')) {
+        targetUrlString = microserviceTargets.catalog[currentMicroserviceIndex.catalog]!;
+        currentMicroserviceIndex.catalog = (currentMicroserviceIndex.catalog + 1) % microserviceTargets.catalog.length;
+      } else if (req.originalUrl.startsWith('/orders') || req.originalUrl.startsWith('/users')) {
+        // Users contains /users/:id/orders and /users/:id/cart which both go to order-service
+        targetUrlString = microserviceTargets.order[currentMicroserviceIndex.order]!;
+        currentMicroserviceIndex.order = (currentMicroserviceIndex.order + 1) % microserviceTargets.order.length;
+      } else if (req.originalUrl.startsWith('/payments')) {
+        targetUrlString = microserviceTargets.payment[currentMicroserviceIndex.payment]!;
+        currentMicroserviceIndex.payment = (currentMicroserviceIndex.payment + 1) % microserviceTargets.payment.length;
+      } else {
+        // Fallback
+        targetUrlString = microserviceTargets.order[currentMicroserviceIndex.order]!;
+        currentMicroserviceIndex.order = (currentMicroserviceIndex.order + 1) % microserviceTargets.order.length;
+      }
+    } else {
+      targetUrlString = targets[currentTargetIndex]!;
+      currentTargetIndex = (currentTargetIndex + 1) % targets.length;
+    }
 
     const targetUrl = new URL(req.originalUrl, targetUrlString);
     const options = {

@@ -34,6 +34,31 @@ async function bootstrapNotificationMock(config: AppConfig, logger: Logger): Pro
   await boot(config, logger);
 }
 
+async function bootstrapUserService(config: AppConfig, logger: Logger): Promise<void> {
+  const { bootstrapUserService: boot } = await import('./sut/services/user/bootstrap.js');
+  await boot(config, logger);
+}
+
+async function bootstrapCatalogService(config: AppConfig, logger: Logger): Promise<void> {
+  const { bootstrapCatalogService: boot } = await import('./sut/services/catalog/bootstrap.js');
+  await boot(config, logger);
+}
+
+async function bootstrapInventoryService(config: AppConfig, logger: Logger): Promise<void> {
+  const { bootstrapInventoryService: boot } = await import('./sut/services/inventory/bootstrap.js');
+  await boot(config, logger);
+}
+
+async function bootstrapOrderService(config: AppConfig, logger: Logger): Promise<void> {
+  const { bootstrapOrderService: boot } = await import('./sut/services/order/bootstrap.js');
+  await boot(config, logger);
+}
+
+async function bootstrapPaymentMock(config: AppConfig, logger: Logger): Promise<void> {
+  const { bootstrapPaymentMock: boot } = await import('./sut/services/payment/bootstrap.js');
+  await boot(config, logger);
+}
+
 /**
  * Role table. Roles are registered here as their phase lands; an unknown or
  * not-yet-registered role fails fast instead of silently starting nothing.
@@ -43,6 +68,11 @@ const BOOTSTRAPS: Partial<Record<AppRole, Bootstrap>> = {
   'sut-monolith': bootstrapMonolith,
   'api-gateway': bootstrapGateway,
   'notification-mock': bootstrapNotificationMock,
+  'user-service': bootstrapUserService,
+  'catalog-service': bootstrapCatalogService,
+  'inventory-service': bootstrapInventoryService,
+  'order-service': bootstrapOrderService,
+  'payment-mock': bootstrapPaymentMock,
 };
 
 export async function main(): Promise<void> {
