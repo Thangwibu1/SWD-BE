@@ -1,0 +1,11 @@
+node_modules
+dist
+data
+results
+coverage
+.git
+.github
+.env
+*.log
+tests
+database/snapshots/*.dump

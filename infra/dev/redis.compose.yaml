@@ -1,0 +1,14 @@
+# Developer/CI Redis used for A02+ profiles. Port binds to localhost only.
+# Start alongside postgres.compose.yaml when developing SUT with cache.
+name: arch-eval-dev
+services:
+  redis:
+    image: redis:${REDIS_VERSION:?set from versions.env}
+    container_name: arch-eval-dev-redis
+    ports:
+      - '127.0.0.1:${DEV_REDIS_PORT:-6379}:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 30

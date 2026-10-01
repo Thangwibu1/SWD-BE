@@ -1,0 +1,38 @@
+# A01 — Monolith baseline: one app, one PostgreSQL, no cache/queue.
+# Rendered by the experiment worker; variables substituted at deploy time.
+services:
+  app:
+    image: ${BACKEND_IMAGE_DIGEST}
+    environment:
+      APP_ROLE: sut-monolith
+      ARCHITECTURE_ID: A01
+      DATABASE_URL: postgres://bench:bench@postgres:5432/ecommerce
+      SUT_PORT: "3000"
+      LOG_LEVEL: warn
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "dist/healthcheck.js", "http://localhost:3000/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+      start_period: 10s
+    cpus: "1.25"
+    mem_limit: 2304m
+    restart: "no"
+
+  postgres:
+    image: postgres:${POSTGRES_VERSION}
+    environment:
+      POSTGRES_USER: bench
+      POSTGRES_PASSWORD: bench
+      POSTGRES_DB: ecommerce
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bench -d ecommerce"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    cpus: "0.75"
+    mem_limit: 1792m

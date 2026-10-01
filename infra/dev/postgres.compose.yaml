@@ -1,0 +1,21 @@
+# Developer/CI PostgreSQL used to build seed snapshots and run integration
+# tests. NOT a SUT template: benchmark stacks are rendered from
+# infra/sut-templates by the worker. Port binds to localhost only.
+name: arch-eval-dev
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION:?set from versions.env}
+    container_name: arch-eval-dev-postgres
+    environment:
+      POSTGRES_USER: bench
+      POSTGRES_PASSWORD: bench
+      POSTGRES_DB: ecommerce
+    ports:
+      - '127.0.0.1:${DEV_POSTGRES_PORT:-25432}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bench -d ecommerce']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    tmpfs:
+      - /var/lib/postgresql/data

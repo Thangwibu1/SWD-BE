@@ -1,0 +1,33 @@
+{
+  "file": "pilot-20261001.dump",
+  "profile": "pilot",
+  "seed": 20261001,
+  "sha256": "5d85242957b3e8eec4d2b0875a988c9407eb2c31c429bc66b7430443e8ab547e",
+  "sizeBytes": 1173763,
+  "checksum": {
+    "tables": {
+      "users": {
+        "rows": 1000,
+        "sha256": "18da5b4a99c19b55814a7525f6ced384313733739f129390fb87c39c8144b646"
+      },
+      "products": {
+        "rows": 2000,
+        "sha256": "beaf7d417f869ca4d123735e956292b74e36b32868a945cb7eb2ca98eef90ce8"
+      },
+      "inventory": {
+        "rows": 2000,
+        "sha256": "45e46dc24d8ee8690cf12463461bde02d0866f127951528e9cd1ef407d309aeb"
+      },
+      "orders": {
+        "rows": 5000,
+        "sha256": "9feb8216ae4cfde24ae0e3ad7ab78dc78b2039b0bd69f1fd35f5a113daaf36f1"
+      },
+      "order_items": {
+        "rows": 15000,
+        "sha256": "3dfde7a328d2a8721a5f8b6c705cc54d3186b4998b8aa41f5e16e0c004bc21d3"
+      }
+    },
+    "combined": "7a92818881f7a45447b856ab3fc2d9b9d70dc59dbbca150875ed15916141633e"
+  },
+  "createdAt": "2026-10-01T09:23:59.078Z"
+}

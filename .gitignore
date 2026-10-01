@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+data/
+.env
+results/*
+!results/.gitkeep
+database/snapshots/*.dump
+*.log

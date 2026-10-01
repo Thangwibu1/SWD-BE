@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "registry-entry",
+  "title": "Architecture Registry Entry",
+  "description": "Schema for architecture-registry/Axx.yaml files (guide §11).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "family",
+    "composeTemplate",
+    "cache",
+    "messaging",
+    "scalingProfile",
+    "communication",
+    "resourceProfile",
+    "allowedRoles"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^A\\d{2}$",
+      "description": "Registry ID A01–A12."
+    },
+    "family": {
+      "type": "string",
+      "enum": ["MODULAR_MONOLITH", "REST_MICROSERVICES", "EVENT_DRIVEN_MICROSERVICES"]
+    },
+    "composeTemplate": {
+      "type": "string",
+      "description": "Relative path to the Compose template for this profile."
+    },
+    "cache": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "targets": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["product", "cart"] }
+        }
+      }
+    },
+    "messaging": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "broker"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "broker": { "type": "string", "enum": ["NONE", "RABBITMQ"] }
+      }
+    },
+    "scalingProfile": {
+      "type": "string",
+      "enum": [
+        "SINGLE_INSTANCE",
+        "DUAL_APP_PROXY",
+        "ONE_PER_SERVICE",
+        "CATALOG_SCALED",
+        "ORDER_SCALED",
+        "DUAL_APP_PROXY_ASYNC"
+      ]
+    },
+    "communication": {
+      "type": "string",
+      "enum": ["IN_PROCESS", "HTTP_JSON", "AMQP_EVENT"]
+    },
+    "resourceProfile": {
+      "type": "string",
+      "description": "Lookup key for resource allocation (CPU/RAM per container)."
+    },
+    "allowedRoles": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Container roles that may appear in the SUT sandbox."
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cpus", "memoryMiB"],
+        "properties": {
+          "cpus": { "type": "number", "minimum": 0.1 },
+          "memoryMiB": { "type": "integer", "minimum": 64 }
+        }
+      },
+      "description": "CPU/RAM per container. sum(cpus)<=2.0, sum(memoryMiB)<=4096."
+    }
+  }
+}

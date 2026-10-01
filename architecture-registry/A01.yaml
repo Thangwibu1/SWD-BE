@@ -1,0 +1,23 @@
+# A01 — Modular Monolith Baseline
+# Single instance, no cache, no queue. The simplest architecture.
+id: A01
+family: MODULAR_MONOLITH
+composeTemplate: infra/sut-templates/monolith.compose.yaml
+cache:
+  enabled: false
+messaging:
+  enabled: false
+  broker: NONE
+scalingProfile: SINGLE_INSTANCE
+communication: IN_PROCESS
+resourceProfile: monolith_baseline_v1
+allowedRoles:
+  - sut-monolith
+  - postgres
+resources:
+  sut-monolith:
+    cpus: 1.25
+    memoryMiB: 2304
+  postgres:
+    cpus: 0.75
+    memoryMiB: 1792

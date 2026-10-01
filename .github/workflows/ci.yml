@@ -1,0 +1,43 @@
+name: backend-ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run test:unit
+      - run: npm run test:contract -- --passWithNoTests
+      # Registry validator lands in Phase 6; until then the step is skipped.
+      - if: ${{ hashFiles('scripts/validate-registry.ts') != '' }}
+        run: npm run registry:validate
+      - name: Docker build
+        run: |
+          set -a; . ./versions.env; set +a
+          docker build --build-arg NODE_IMAGE="$NODE_IMAGE" -t architecture-evaluation-backend:ci .
+
+  integration:
+    needs: verify
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: npm
+      - run: npm ci
+      # Integration tests start PostgreSQL/Redis/RabbitMQ via Docker Compose
+      # using pinned tags from versions.env.
+      - run: npm run test:integration -- --passWithNoTests

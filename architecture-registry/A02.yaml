@@ -1,0 +1,31 @@
+# A02 — Modular Monolith with Redis Cache
+# Single instance, Redis for product reads and cart storage.
+# Measures the cache effect vs A01 baseline.
+id: A02
+family: MODULAR_MONOLITH
+composeTemplate: infra/sut-templates/monolith-cached.compose.yaml
+cache:
+  enabled: true
+  targets:
+    - product
+    - cart
+messaging:
+  enabled: false
+  broker: NONE
+scalingProfile: SINGLE_INSTANCE
+communication: IN_PROCESS
+resourceProfile: monolith_cached_v1
+allowedRoles:
+  - sut-monolith
+  - postgres
+  - redis
+resources:
+  sut-monolith:
+    cpus: 1.0
+    memoryMiB: 1792
+  postgres:
+    cpus: 0.5
+    memoryMiB: 1536
+  redis:
+    cpus: 0.5
+    memoryMiB: 768
