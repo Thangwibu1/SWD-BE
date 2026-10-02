@@ -27,6 +27,10 @@ import type { InventoryTxOps } from './inventory-module.js';
  * This is the key structural difference vs REST (distributed calls) and
  * event-driven (saga with compensation).
  */
+export interface EventPublisher {
+  publish(routingKey: string, event: Omit<any, 'eventId' | 'occurredAt' | 'schemaVersion'>): Promise<void>;
+}
+
 export type NotificationSender = (orderId: string) => void;
 
 export function createOrderModule(
@@ -34,9 +38,13 @@ export function createOrderModule(
   inventoryTx: InventoryTxOps,
   payments: PaymentApi,
   sendNotification?: NotificationSender,
+  publisher?: EventPublisher,
 ): OrderApi {
   return {
     async checkout(idempotencyKey, request): Promise<CheckoutResult> {
+      if (publisher) {
+        return checkoutAsync(db, publisher, idempotencyKey, request);
+      }
       return checkoutInTransaction(db, inventoryTx, payments, idempotencyKey, request, sendNotification);
     },
 
@@ -178,6 +186,100 @@ async function checkoutInTransaction(
     }
 
     return { order: await getOrderFromTx(tx, orderId), outcome: 'completed' as const, replayed: false };
+  });
+}
+
+// ─── Async Checkout (Event-Driven) ──────────────────────────────────────
+
+async function checkoutAsync(
+  db: Database,
+  publisher: EventPublisher,
+  idempotencyKey: string,
+  request: CheckoutRequest,
+): Promise<CheckoutResult> {
+  assertUniqueItems(request.items);
+  if (request.items.length > MAX_CHECKOUT_LINES) {
+    throw new DomainError('VALIDATION_FAILED', { field: 'items', reason: `max ${MAX_CHECKOUT_LINES}` });
+  }
+
+  return db.transaction(async (tx) => {
+    // Idempotency replay
+    const existing = await tx.query<OrderDbRow & { items_json: string }>(
+      'order.idempotency',
+      `SELECT o.*, json_agg(json_build_object(
+         'productId', oi.product_id, 'quantity', oi.quantity, 'unitPrice', oi.unit_price
+       ) ORDER BY oi.product_id) AS items_json
+       FROM orders o
+       JOIN order_items oi ON oi.order_id = o.id
+       WHERE o.idempotency_key = $1
+       GROUP BY o.id`,
+      [idempotencyKey],
+    );
+    if (existing.rows[0]) {
+      const row = existing.rows[0];
+      const storedItems: Array<{ productId: string; quantity: number }> = JSON.parse(
+        typeof row.items_json === 'string' ? row.items_json : JSON.stringify(row.items_json),
+      ) as Array<{ productId: string; quantity: number }>;
+      if (!isSameCheckout({ userId: row.user_id, items: storedItems }, request)) {
+        throw new DomainError('IDEMPOTENCY_KEY_CONFLICT');
+      }
+      return { order: await getOrderFromTx(tx, row.id), outcome: 'accepted' as const, replayed: true };
+    }
+
+    // Look up unit prices
+    const productIds = request.items.map((i) => i.productId);
+    const priceRes = await tx.query<{ id: string; price: string; is_active: boolean }>(
+      'order.lookupPrices',
+      `SELECT id, price, is_active FROM products WHERE id = ANY($1)`,
+      [productIds],
+    );
+    const priceMap = new Map(priceRes.rows.map((r) => [r.id, r]));
+    const itemsWithPrice: Array<{ productId: string; quantity: number; unitPrice: string }> = [];
+    for (const item of request.items) {
+      const product = priceMap.get(item.productId);
+      if (!product) throw new DomainError('PRODUCT_NOT_FOUND');
+      if (!product.is_active) throw new DomainError('PRODUCT_INACTIVE');
+      itemsWithPrice.push({ productId: item.productId, quantity: item.quantity, unitPrice: product.price });
+    }
+
+    const totalCents = orderTotalCents(itemsWithPrice);
+    const totalAmount = fromCents(totalCents);
+
+    const orderRes = await tx.query<{ id: string; created_at: string; updated_at: string }>(
+      'order.create',
+      `INSERT INTO orders (user_id, status, payment_status, total_amount, idempotency_key)
+       VALUES ($1, 'PENDING', 'PENDING', $2, $3)
+       RETURNING id, created_at, updated_at`,
+      [request.userId, totalAmount, idempotencyKey],
+    );
+    const orderId = orderRes.rows[0]!.id;
+
+    for (const item of itemsWithPrice) {
+      await tx.query(
+        'order.createItem',
+        `INSERT INTO order_items (order_id, product_id, quantity, unit_price)
+         VALUES ($1, $2, $3, $4)`,
+        [orderId, item.productId, item.quantity, item.unitPrice],
+      );
+    }
+
+    const order = await getOrderFromTx(tx, orderId);
+
+    // Publish event
+    await publisher.publish('order.created', {
+      eventType: 'order.created',
+      aggregateId: orderId,
+      correlationId: '',
+      payload: {
+        orderId,
+        userId: request.userId,
+        items: itemsWithPrice,
+        totalAmount,
+        paymentMode: request.paymentMode,
+      },
+    });
+
+    return { order, outcome: 'accepted' as const, replayed: false };
   });
 }
 

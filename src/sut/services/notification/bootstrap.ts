@@ -3,6 +3,9 @@ import { loadSutConfig } from '../../../config/sut-env.js';
 import type { Logger } from '../../../utils/logger.js';
 import { createSutApp, finalizeSutApp } from '../../shared/http/sut-http.js';
 import type { Request, Response } from 'express';
+import { RabbitMQClient } from '../../shared/events/rabbitmq.js';
+
+const EVENT_DRIVEN_ARCHITECTURES = new Set(['A04', 'A09', 'A10', 'A11', 'A12']);
 
 export async function bootstrapNotificationMock(_appConfig: AppConfig, logger: Logger): Promise<void> {
   const config = loadSutConfig();
@@ -29,12 +32,28 @@ export async function bootstrapNotificationMock(_appConfig: AppConfig, logger: L
 
   finalizeSutApp(app, logger);
 
+  let rabbitmq: RabbitMQClient | undefined;
+  if (EVENT_DRIVEN_ARCHITECTURES.has(archId)) {
+    const rmqUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
+    rabbitmq = new RabbitMQClient(rmqUrl, logger);
+    await rabbitmq.connect();
+
+    await rabbitmq.subscribe('notification.order.confirmed', ['order.confirmed'], async (event) => {
+      logger.info({ orderId: event.payload.orderId }, 'Sent confirmation notification (mock)');
+    });
+
+    await rabbitmq.subscribe('notification.order.cancelled', ['order.cancelled'], async (event) => {
+      logger.info({ orderId: event.payload.orderId }, 'Sent cancellation notification (mock)');
+    });
+  }
+
   const server = app.listen(config.SUT_PORT, '0.0.0.0', () => {
     logger.info({ port: config.SUT_PORT, architectureId: archId }, 'Notification Mock listening');
   });
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutting down Notification Mock');
+    if (rabbitmq) await rabbitmq.close().catch(() => {});
     server.close(() => process.exit(0));
   };
 

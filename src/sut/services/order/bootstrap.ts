@@ -14,8 +14,10 @@ import { MemoryCartStore } from '../../monolith/cart-module.js';
 import type { CartStore } from '../../monolith/cart-module.js';
 import { createCartModule } from '../../monolith/cart-module.js';
 import { currentRequestId } from '../../shared/observability/request-context.js';
+import { RabbitMQClient } from '../../shared/events/rabbitmq.js';
 
-const REDIS_CACHE_ARCHITECTURES = new Set(['A06', 'A07', 'A08']);
+const REDIS_CACHE_ARCHITECTURES = new Set(['A06', 'A07', 'A08', 'A10', 'A11', 'A12']);
+const EVENT_DRIVEN_ARCHITECTURES = new Set(['A09', 'A10', 'A11', 'A12']);
 
 export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logger): Promise<void> {
   const config = loadSutConfig();
@@ -90,8 +92,17 @@ export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logge
     logger.info('Redis connected — cart store active');
   }
 
+  let rabbitmq: RabbitMQClient | undefined;
+  let publisher: any = undefined;
+  if (EVENT_DRIVEN_ARCHITECTURES.has(archId)) {
+    const rmqUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
+    rabbitmq = new RabbitMQClient(rmqUrl, logger);
+    await rabbitmq.connect();
+    publisher = rabbitmq;
+  }
+
   const cart = createCartModule(cartStore);
-  const orders = createOrderModule(db, inventoryTx, payments);
+  const orders = createOrderModule(db, inventoryTx, payments, undefined, publisher);
 
   const apis = {
     cart,
@@ -113,6 +124,7 @@ export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logge
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutting down Order Service');
+    if (rabbitmq) await rabbitmq.close().catch(() => {});
     server.close(() => process.exit(0));
   };
   process.once('SIGINT', () => void shutdown('SIGINT'));

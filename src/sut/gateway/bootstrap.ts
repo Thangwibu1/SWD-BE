@@ -14,7 +14,7 @@ export async function bootstrapGateway(_appConfig: AppConfig, logger: Logger): P
 
   const app = createSutApp(logger);
 
-  const isMicroservices = archId >= 'A05' && archId <= 'A08';
+  const isMicroservices = archId >= 'A05' && archId <= 'A12';
 
   let targets: string[] = [];
   const microserviceTargets: { user: string[]; catalog: string[]; order: string[]; payment: string[] } = {

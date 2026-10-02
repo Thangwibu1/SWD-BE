@@ -1,0 +1,224 @@
+services:
+  app:
+    image: ${BACKEND_IMAGE_DIGEST}
+    environment:
+      APP_ROLE: api-gateway
+      ARCHITECTURE_ID: ${ARCHITECTURE_ID:-A09}
+      SUT_PORT: "3000"
+      LOG_LEVEL: warn
+      NODE_ENV: production
+      USER_URL: http://user-service:3000
+      CATALOG_URL: http://catalog-service-1:3000,http://catalog-service-2:3000
+      ORDER_URL: http://order-service:3000
+      PAYMENT_URL: http://payment-mock:3000
+    depends_on:
+      user-service: { condition: service_healthy }
+      catalog-service-1: { condition: service_healthy }
+      catalog-service-2: { condition: service_healthy }
+      order-service: { condition: service_healthy }
+      payment-mock: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "dist/healthcheck.js", "http://localhost:3000/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+      start_period: 10s
+    cpus: "0.1"
+    mem_limit: 256m
+    restart: "no"
+
+  user-service:
+    image: ${BACKEND_IMAGE_DIGEST}
+    environment:
+      APP_ROLE: user-service
+      ARCHITECTURE_ID: ${ARCHITECTURE_ID:-A09}
+      DATABASE_URL: postgres://bench:bench@postgres:5432/ecommerce
+      SUT_PORT: "3000"
+      LOG_LEVEL: warn
+      NODE_ENV: production
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "dist/healthcheck.js", "http://localhost:3000/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+    cpus: "0.1"
+    mem_limit: 192m
+
+  catalog-service-1:
+    image: ${BACKEND_IMAGE_DIGEST}
+    environment:
+      APP_ROLE: catalog-service
+      ARCHITECTURE_ID: ${ARCHITECTURE_ID:-A09}
+      DATABASE_URL: postgres://bench:bench@postgres:5432/ecommerce
+      REDIS_URL: redis://redis:6379
+      SUT_PORT: "3000"
+      LOG_LEVEL: warn
+      NODE_ENV: production
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "dist/healthcheck.js", "http://localhost:3000/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+    cpus: "0.05"
+    mem_limit: 192m
+
+  catalog-service-2:
+    image: ${BACKEND_IMAGE_DIGEST}
+    environment:
+      APP_ROLE: catalog-service
+      ARCHITECTURE_ID: ${ARCHITECTURE_ID:-A09}
+      DATABASE_URL: postgres://bench:bench@postgres:5432/ecommerce
+      REDIS_URL: redis://redis:6379
+      SUT_PORT: "3000"
+      LOG_LEVEL: warn
+      NODE_ENV: production
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "dist/healthcheck.js", "http://localhost:3000/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+    cpus: "0.05"
+    mem_limit: 192m
+
+  inventory-service:
+    image: ${BACKEND_IMAGE_DIGEST}
+    environment:
+      APP_ROLE: inventory-service
+      ARCHITECTURE_ID: ${ARCHITECTURE_ID:-A09}
+      DATABASE_URL: postgres://bench:bench@postgres:5432/ecommerce
+      RABBITMQ_URL: amqp://rabbitmq
+      SUT_PORT: "3000"
+      LOG_LEVEL: warn
+      NODE_ENV: production
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "dist/healthcheck.js", "http://localhost:3000/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+    cpus: "0.1"
+    mem_limit: 256m
+
+  order-service:
+    image: ${BACKEND_IMAGE_DIGEST}
+    environment:
+      APP_ROLE: order-service
+      ARCHITECTURE_ID: ${ARCHITECTURE_ID:-A09}
+      DATABASE_URL: postgres://bench:bench@postgres:5432/ecommerce
+      RABBITMQ_URL: amqp://rabbitmq
+      REDIS_URL: redis://redis:6379
+      SUT_PORT: "3000"
+      LOG_LEVEL: warn
+      NODE_ENV: production
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "dist/healthcheck.js", "http://localhost:3000/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+    cpus: "0.1"
+    mem_limit: 256m
+
+  event-worker:
+    image: ${BACKEND_IMAGE_DIGEST}
+    environment:
+      APP_ROLE: event-worker
+      ARCHITECTURE_ID: ${ARCHITECTURE_ID:-A09}
+      DATABASE_URL: postgres://bench:bench@postgres:5432/ecommerce
+      RABBITMQ_URL: amqp://rabbitmq
+      SUT_PORT: "3000"
+      LOG_LEVEL: warn
+      NODE_ENV: production
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    cpus: "0.1"
+    mem_limit: 256m
+    # Event worker doesn't have an HTTP API in our implementation yet, so no HTTP healthcheck.
+    # Actually wait, I should add a simple healthcheck route to event-worker if I want depends_on to work.
+    # We can omit healthcheck since it is a background worker.
+
+  payment-mock:
+    image: ${BACKEND_IMAGE_DIGEST}
+    environment:
+      APP_ROLE: payment-mock
+      ARCHITECTURE_ID: ${ARCHITECTURE_ID:-A09}
+      RABBITMQ_URL: amqp://rabbitmq
+      SUT_PORT: "3000"
+      LOG_LEVEL: warn
+      NODE_ENV: production
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "dist/healthcheck.js", "http://localhost:3000/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+    cpus: "0.1"
+    mem_limit: 192m
+
+  notification-mock:
+    image: ${BACKEND_IMAGE_DIGEST}
+    environment:
+      APP_ROLE: notification-mock
+      ARCHITECTURE_ID: ${ARCHITECTURE_ID:-A09}
+      RABBITMQ_URL: amqp://rabbitmq
+      SUT_PORT: "3000"
+      LOG_LEVEL: warn
+      NODE_ENV: production
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "dist/healthcheck.js", "http://localhost:3000/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+    cpus: "0.1"
+    mem_limit: 128m
+
+  postgres:
+    image: postgres:15.3-alpine
+    environment:
+      POSTGRES_USER: bench
+      POSTGRES_PASSWORD: bench
+      POSTGRES_DB: ecommerce
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bench"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    cpus: "1.0"
+    mem_limit: 1536m
+
+  redis:
+    image: redis:7.0-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    cpus: "0.0"
+    mem_limit: 128m
+
+  rabbitmq:
+    image: rabbitmq:3.12-alpine
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    cpus: "0.2"
+    mem_limit: 512m

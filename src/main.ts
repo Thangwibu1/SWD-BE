@@ -59,6 +59,11 @@ async function bootstrapPaymentMock(config: AppConfig, logger: Logger): Promise<
   await boot(config, logger);
 }
 
+async function bootstrapEventWorker(config: AppConfig, logger: Logger): Promise<void> {
+  const { bootstrapEventWorker: boot } = await import('./sut/services/event-worker/bootstrap.js');
+  await boot(config, logger);
+}
+
 /**
  * Role table. Roles are registered here as their phase lands; an unknown or
  * not-yet-registered role fails fast instead of silently starting nothing.
@@ -73,6 +78,7 @@ const BOOTSTRAPS: Partial<Record<AppRole, Bootstrap>> = {
   'inventory-service': bootstrapInventoryService,
   'order-service': bootstrapOrderService,
   'payment-mock': bootstrapPaymentMock,
+  'event-worker': bootstrapEventWorker,
 };
 
 export async function main(): Promise<void> {
