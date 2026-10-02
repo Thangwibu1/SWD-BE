@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "candidateId": "test-c10",
+  "architectureId": "A10",
+  "architectureFamily": "EVENT_DRIVEN_MICROSERVICES",
+  "priorities": [
+    { "metric": "p99_ms", "operator": "LTE", "target": 100, "weight": 0.45 },
+    { "metric": "monthly_cost_usd", "operator": "MIN", "weight": 0.30 },
+    { "metric": "scalability", "operator": "MAX", "weight": 0.25 }
+  ],
+  "components": ["api-gateway", "user", "catalog", "inventory", "order", "payment-mock", "postgres", "redis", "rabbitmq"],
+  "decisions": {
+    "cache": { "enabled": true, "targets": ["product", "cart"], "ttlSeconds": 60 },
+    "messaging": { "enabled": true, "broker": "RABBITMQ" },
+    "scalingProfile": "ONE_PER_SERVICE",
+    "communication": "AMQP_EVENT"
+  },
+  "assumptions": ["test"],
+  "rationale": ["test"]
+}

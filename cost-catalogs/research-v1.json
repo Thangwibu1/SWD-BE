@@ -1,0 +1,19 @@
+{
+  "version": "research-v1",
+  "currency": "USD",
+  "hoursPerMonth": 730,
+  "rates": {
+    "vcpuHour": 0.031,
+    "gbRamHour": 0.0042,
+    "gbStorageMonth": 0.10,
+    "gbEgress": 0.09,
+    "postgresFixedMonth": 20,
+    "redisFixedMonth": 10,
+    "rabbitmqFixedMonth": 15,
+    "loadBalancerMonth": 12
+  },
+  "engineering": {
+    "hourlyRate": 25,
+    "complexityHours": { "LOW": 16, "MEDIUM": 40, "HIGH": 80 }
+  }
+}

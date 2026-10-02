@@ -25,7 +25,18 @@ export class RabbitMQClient {
 
   async connect(): Promise<void> {
     this.logger.info({ url: this.url }, 'Connecting to RabbitMQ');
-    this.conn = await amqplib.connect(this.url);
+    for (let i = 0; i < 30; i++) {
+      try {
+        this.conn = await amqplib.connect(this.url);
+        break;
+      } catch (err) {
+        this.logger.warn({ err }, 'RabbitMQ connect failed, retrying in 2s...');
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+    if (!this.conn) {
+      this.conn = await amqplib.connect(this.url);
+    }
     
     this.conn.on('error', (err: unknown) => {
       this.logger.error({ err }, 'RabbitMQ connection error');

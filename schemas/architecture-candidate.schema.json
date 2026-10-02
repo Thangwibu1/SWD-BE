@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "architecture-candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "candidateId",
+    "architectureId",
+    "architectureFamily",
+    "priorities",
+    "components",
+    "decisions",
+    "assumptions",
+    "rationale"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "candidateId": {
+      "type": "string"
+    },
+    "architectureId": {
+      "type": "string",
+      "pattern": "^A(0[1-9]|1[0-2])$"
+    },
+    "architectureFamily": {
+      "type": "string",
+      "enum": [
+        "MODULAR_MONOLITH",
+        "REST_MICROSERVICES",
+        "EVENT_DRIVEN_MICROSERVICES"
+      ]
+    },
+    "priorities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["metric", "operator", "weight"],
+        "properties": {
+          "metric": {
+            "type": "string",
+            "enum": [
+              "p99_ms",
+              "error_rate",
+              "throughput_rps",
+              "monthly_cost_usd",
+              "engineering_effort",
+              "scalability",
+              "recovery_time_s"
+            ]
+          },
+          "operator": {
+            "type": "string",
+            "enum": ["LTE", "GTE", "MIN", "MAX"]
+          },
+          "target": {
+            "type": "number"
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "decisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cache", "messaging", "scalingProfile", "communication"],
+      "properties": {
+        "cache": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "targets"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "targets": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["product", "cart"] }
+            },
+            "ttlSeconds": { "type": "integer" }
+          }
+        },
+        "messaging": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "broker"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "broker": { "type": "string", "enum": ["NONE", "RABBITMQ"] }
+          }
+        },
+        "scalingProfile": {
+          "type": "string",
+          "enum": [
+            "SINGLE_INSTANCE",
+            "DUAL_APP_PROXY",
+            "ONE_PER_SERVICE",
+            "CATALOG_SCALED",
+            "ORDER_SCALED",
+            "DUAL_APP_PROXY_ASYNC"
+          ]
+        },
+        "communication": {
+          "type": "string",
+          "enum": ["IN_PROCESS", "HTTP_JSON", "AMQP_EVENT"]
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 240
+      }
+    },
+    "rationale": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 240
+      }
+    }
+  }
+}

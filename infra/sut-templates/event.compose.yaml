@@ -194,9 +194,10 @@ services:
   rabbitmq:
     image: rabbitmq:3.12-alpine
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 5s
-      timeout: 2s
-      retries: 10
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 15s
+      retries: 20
+      start_period: 30s
     cpus: "0.2"
     mem_limit: 512m

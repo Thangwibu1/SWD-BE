@@ -6,6 +6,7 @@ import type { Logger } from '../utils/logger.js';
 import { requestIdMiddleware } from '../utils/request-id.js';
 import { corsMiddleware } from './middleware/cors.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
+import { createV1Router } from './routes/v1.js';
 
 export interface ReadinessProbe {
   name: string;
@@ -29,11 +30,12 @@ export function createApp({ config, logger, readinessProbes = [] }: AppDependenc
   app.use(corsMiddleware(config.CORS_ORIGINS.split(',')));
   app.use(express.json({ limit: '256kb' }));
 
-  const v1 = express.Router();
-  v1.get('/health', (_req, res) => {
+  // Health/ready endpoints
+  const healthRouter = express.Router();
+  healthRouter.get('/health', (_req, res) => {
     res.json({ status: 'ok', role: config.APP_ROLE });
   });
-  v1.get('/ready', async (_req, res) => {
+  healthRouter.get('/ready', async (_req, res) => {
     const results = await Promise.all(
       readinessProbes.map(async (probe) => {
         try {
@@ -46,7 +48,10 @@ export function createApp({ config, logger, readinessProbes = [] }: AppDependenc
     const ready = results.every((result) => result.ok);
     res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not-ready', checks: results });
   });
-  app.use('/api/v1', v1);
+
+  // Mount health + all v1 API routes
+  app.use('/api/v1', healthRouter);
+  app.use('/api/v1', createV1Router());
 
   app.use(notFoundHandler);
   app.use(errorHandler(logger));
