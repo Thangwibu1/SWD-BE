@@ -1,8 +1,9 @@
 import amqplib from 'amqplib';
-import type { Connection, Channel, ConfirmChannel, ConsumeMessage } from 'amqplib';
+import type { Channel, ConfirmChannel, ConsumeMessage } from 'amqplib';
 import type { Logger } from '../../../utils/logger.js';
 import { currentRequestId } from '../observability/request-context.js';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface EventEnvelope<T = any> {
   eventId: string;
   eventType: string;
@@ -15,6 +16,7 @@ export interface EventEnvelope<T = any> {
 }
 
 export class RabbitMQClient {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private conn: any | null = null;
   private pubChannel: ConfirmChannel | null = null;
   private subChannel: Channel | null = null;
@@ -25,7 +27,7 @@ export class RabbitMQClient {
     this.logger.info({ url: this.url }, 'Connecting to RabbitMQ');
     this.conn = await amqplib.connect(this.url);
     
-    this.conn.on('error', (err: any) => {
+    this.conn.on('error', (err: unknown) => {
       this.logger.error({ err }, 'RabbitMQ connection error');
     });
 
@@ -65,7 +67,7 @@ export class RabbitMQClient {
           timestamp: new Date(event.occurredAt).getTime(),
           correlationId: event.correlationId,
         },
-        (err: any) => {
+        (err: unknown) => {
           if (err) return reject(err);
           resolve();
         }

@@ -97,7 +97,7 @@ export async function bootstrapInventoryService(_appConfig: AppConfig, logger: L
           schemaVersion: 1,
           payload: { orderId, items, paymentMode, amount: totalAmount },
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         await rabbitmq!.publish('inventory.rejected', {
           eventId: crypto.randomUUID(),
           eventType: 'inventory.rejected',
@@ -106,7 +106,7 @@ export async function bootstrapInventoryService(_appConfig: AppConfig, logger: L
           correlationId: event.correlationId,
           causationId: event.eventId,
           schemaVersion: 1,
-          payload: { orderId, reason: err.message },
+          payload: { orderId, reason: err instanceof Error ? err.message : String(err) },
         });
       }
     });

@@ -15,6 +15,8 @@ import type { CartStore } from '../../monolith/cart-module.js';
 import { createCartModule } from '../../monolith/cart-module.js';
 import { currentRequestId } from '../../shared/observability/request-context.js';
 import { RabbitMQClient } from '../../shared/events/rabbitmq.js';
+import type { EventEnvelope } from '../../shared/events/rabbitmq.js';
+import type { EventPublisher } from '../../monolith/order-module.js';
 
 const REDIS_CACHE_ARCHITECTURES = new Set(['A06', 'A07', 'A08', 'A10', 'A11', 'A12']);
 const EVENT_DRIVEN_ARCHITECTURES = new Set(['A09', 'A10', 'A11', 'A12']);
@@ -44,6 +46,7 @@ export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logge
         signal: AbortSignal.timeout(3000),
       });
       if (!res.ok) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const err = (await res.json().catch(() => ({}))) as any;
         throw new DomainError(err.code || 'DEPENDENCY_UNAVAILABLE', err.details);
       }
@@ -78,6 +81,7 @@ export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logge
         signal: AbortSignal.timeout(3000),
       });
       if (!res.ok) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const err = (await res.json().catch(() => ({}))) as any;
         throw new DomainError(err.code || 'DEPENDENCY_UNAVAILABLE', err.details);
       }
@@ -93,12 +97,24 @@ export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logge
   }
 
   let rabbitmq: RabbitMQClient | undefined;
-  let publisher: any = undefined;
   if (EVENT_DRIVEN_ARCHITECTURES.has(archId)) {
     const rmqUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
     rabbitmq = new RabbitMQClient(rmqUrl, logger);
     await rabbitmq.connect();
-    publisher = rabbitmq;
+  }
+
+  let publisher: EventPublisher | undefined;
+  if (rabbitmq) {
+    publisher = {
+      publish: async (routingKey, event) => {
+        await rabbitmq!.publish(routingKey, {
+          eventId: crypto.randomUUID(),
+          occurredAt: new Date().toISOString(),
+          schemaVersion: 1,
+          ...event,
+        } as EventEnvelope<unknown>);
+      },
+    };
   }
 
   const cart = createCartModule(cartStore);

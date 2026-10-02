@@ -28,6 +28,7 @@ import type { InventoryTxOps } from './inventory-module.js';
  * event-driven (saga with compensation).
  */
 export interface EventPublisher {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   publish(routingKey: string, event: Omit<any, 'eventId' | 'occurredAt' | 'schemaVersion'>): Promise<void>;
 }
 

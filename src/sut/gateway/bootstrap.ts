@@ -66,7 +66,7 @@ export async function bootstrapGateway(_appConfig: AppConfig, logger: Logger): P
 
   // Proxy middleware
   app.use((req: Request, res: Response) => {
-    let targetUrlString = '';
+    let targetUrlString: string;
     
     if (isMicroservices) {
       if (req.originalUrl.startsWith('/auth')) {

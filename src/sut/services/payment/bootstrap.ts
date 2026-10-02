@@ -62,7 +62,7 @@ export async function bootstrapPaymentMock(_appConfig: AppConfig, logger: Logger
             payload: { orderId, reason: 'Payment declined' },
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         await rabbitmq!.publish('payment.failed', {
           eventId: crypto.randomUUID(),
           eventType: 'payment.failed',
@@ -71,7 +71,7 @@ export async function bootstrapPaymentMock(_appConfig: AppConfig, logger: Logger
           correlationId: event.correlationId,
           causationId: event.eventId,
           schemaVersion: 1,
-          payload: { orderId, reason: err.message },
+          payload: { orderId, reason: err instanceof Error ? err.message : String(err) },
         });
       }
     });
