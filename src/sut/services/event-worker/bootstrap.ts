@@ -18,12 +18,12 @@ export async function bootstrapEventWorker(_appConfig: AppConfig, logger: Logger
   const db = new Database(pool);
 
   const rmqUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
-  const rabbitmq = new RabbitMQClient(rmqUrl, logger);
+  const rabbitmq = new RabbitMQClient(rmqUrl, logger, db);
   await rabbitmq.connect();
 
   // Handler: payment.completed
   await rabbitmq.subscribe('order.payment.completed', ['payment.completed'], async (event) => {
-    const { orderId } = event.payload;
+    const { orderId, userId, amount, items } = event.payload;
     await db.transaction(async (tx) => {
       await tx.query(
         'order.confirm',
@@ -40,7 +40,7 @@ export async function bootstrapEventWorker(_appConfig: AppConfig, logger: Logger
       correlationId: event.correlationId,
       causationId: event.eventId,
       schemaVersion: 1,
-      payload: { orderId },
+      payload: { orderId, userId, totalAmount: amount, items },
     });
   });
 
@@ -63,7 +63,7 @@ export async function bootstrapEventWorker(_appConfig: AppConfig, logger: Logger
       correlationId: event.correlationId,
       causationId: event.eventId,
       schemaVersion: 1,
-      payload: { orderId },
+      payload: { orderId, reason: 'PAYMENT_FAILED' },
     });
   });
 
@@ -86,7 +86,7 @@ export async function bootstrapEventWorker(_appConfig: AppConfig, logger: Logger
       correlationId: event.correlationId,
       causationId: event.eventId,
       schemaVersion: 1,
-      payload: { orderId },
+      payload: { orderId, reason: 'INVENTORY_REJECTED' },
     });
   });
 

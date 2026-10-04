@@ -2,8 +2,8 @@
   "file": "pilot-20261001.dump",
   "profile": "pilot",
   "seed": 20261001,
-  "sha256": "5d85242957b3e8eec4d2b0875a988c9407eb2c31c429bc66b7430443e8ab547e",
-  "sizeBytes": 1173763,
+  "sha256": "49cb01d42d982ea7819052c74df5004a32db292236c4bf49ea80971d10874b9a",
+  "sizeBytes": 1177390,
   "checksum": {
     "tables": {
       "users": {
@@ -29,5 +29,5 @@
     },
     "combined": "7a92818881f7a45447b856ab3fc2d9b9d70dc59dbbca150875ed15916141633e"
   },
-  "createdAt": "2026-10-01T09:23:59.078Z"
+  "createdAt": "2026-10-02T15:12:04.317Z"
 }

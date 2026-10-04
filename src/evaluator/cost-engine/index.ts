@@ -51,9 +51,12 @@ export interface CostResult {
  * Load a cost catalog from the cost-catalogs directory.
  */
 export function loadCostCatalog(version: string): CostCatalog {
+  if (!/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(version)) throw new Error(`Invalid cost catalog version: ${version}`);
   const catalogPath = path.resolve('cost-catalogs', `${version}.json`);
   const data = readFileSync(catalogPath, 'utf8');
-  return JSON.parse(data) as CostCatalog;
+  const catalog = JSON.parse(data) as CostCatalog;
+  if (catalog.version !== version) throw new Error(`Cost catalog ${version} has a mismatched version`);
+  return catalog;
 }
 
 /**
@@ -126,21 +129,21 @@ export function computeCost(
   const result: CostResult = {
     catalogVersion: catalog.version,
     currency: catalog.currency,
-    computeMonth: Math.round(computeMonth * 100) / 100,
+    computeMonth: round2(computeMonth),
     managedServicesMonth,
-    trafficMonth: Math.round(trafficMonth * 100) / 100,
-    infraMonth: Math.round(infraMonth * 100) / 100,
+    trafficMonth: round2(trafficMonth),
+    infraMonth: round2(infraMonth),
     initialEngineering,
-    maintenanceMonth: Math.round(maintenanceMonth * 100) / 100,
-    tco12m: Math.round(tco12m * 100) / 100,
+    maintenanceMonth: round2(maintenanceMonth),
+    tco12m: round2(tco12m),
     engineeringComplexity: complexity,
     breakdown: {
-      compute: Math.round(computeMonth * 100) / 100,
+      compute: round2(computeMonth),
       postgres: catalog.rates.postgresFixedMonth,
       redis: allocation.hasRedis ? catalog.rates.redisFixedMonth : 0,
       rabbitmq: allocation.hasRabbitMQ ? catalog.rates.rabbitmqFixedMonth : 0,
       loadBalancer: allocation.hasLoadBalancer ? catalog.rates.loadBalancerMonth : 0,
-      traffic: Math.round(trafficMonth * 100) / 100,
+      traffic: round2(trafficMonth),
     },
   };
 

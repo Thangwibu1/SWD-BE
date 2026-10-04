@@ -1,0 +1,2 @@
+ALTER TABLE experiments ADD COLUMN invalid_retry_limit INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE experiment_runs ADD COLUMN attempt INTEGER NOT NULL DEFAULT 0;

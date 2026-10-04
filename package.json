@@ -27,9 +27,15 @@
     "registry:validate": "tsx scripts/validate-registry.ts",
     "candidate:validate": "tsx scripts/validate-candidate.ts",
     "experiment:smoke": "tsx scripts/run-smoke-experiment.ts",
+    "experiment:pilot": "tsx scripts/run-protocol.ts protocols/pilot-v1.yaml",
+    "experiment:main": "tsx scripts/run-protocol.ts protocols/main-v1.yaml",
+    "experiment:capacity": "tsx scripts/run-protocol.ts protocols/capacity-v1.yaml",
+    "experiment:calibrate": "tsx scripts/calibrate-pilot.ts pilot-v1",
+    "experiment:aggregate": "tsx scripts/aggregate-protocol.ts main-v1",
     "report:rebuild": "tsx scripts/rebuild-report.ts",
     "typecheck": "tsc -p tsconfig.scripts.json",
-    "db:sut:reset": "tsx scripts/reset-sut.ts"
+    "db:sut:reset": "tsx scripts/reset-sut.ts",
+    "events:replay-dead": "tsx scripts/replay-dead-letter.ts"
   },
   "dependencies": {
     "ajv": "8.20.0",

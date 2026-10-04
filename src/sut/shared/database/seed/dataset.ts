@@ -3,7 +3,7 @@ import { Prng, ZipfSampler } from './prng.js';
 
 export const DEFAULT_SEED = 20261001;
 
-export type DatasetProfileName = 'pilot' | 'main';
+export type DatasetProfileName = 'pilot' | 'main' | 'capacity';
 
 export interface DatasetProfile {
   name: DatasetProfileName;
@@ -11,12 +11,15 @@ export interface DatasetProfile {
   products: number;
   orders: number;
   itemsPerOrder: number;
+  inventoryPerProduct?: number;
 }
 
 // Sizes from guide section 6.2. items = orders * itemsPerOrder.
 export const DATASET_PROFILES: Record<DatasetProfileName, DatasetProfile> = {
   pilot: { name: 'pilot', users: 1_000, products: 2_000, orders: 5_000, itemsPerOrder: 3 },
   main: { name: 'main', users: 50_000, products: 20_000, orders: 200_000, itemsPerOrder: 3 },
+  capacity: { name: 'capacity', users: 50_000, products: 20_000, orders: 200_000, itemsPerOrder: 3,
+    inventoryPerProduct: 10_000_000 },
 };
 
 export const ZIPF_EXPONENT = 1.07;
@@ -175,7 +178,7 @@ export function generateDataset(profile: DatasetProfile, seed = DEFAULT_SEED): D
     });
     inventory.push({
       productId: id,
-      availableQuantity: prng.int(50, 500),
+      availableQuantity: profile.inventoryPerProduct ?? prng.int(50, 500),
       reservedQuantity: 0,
       version: 0,
     });

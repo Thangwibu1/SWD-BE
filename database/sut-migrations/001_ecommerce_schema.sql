@@ -38,6 +38,9 @@ CREATE TABLE orders (
     CHECK (payment_status IN ('NOT_REQUIRED','PENDING','PAID','FAILED','REFUNDED')),
   total_amount numeric(12,2) NOT NULL CHECK (total_amount >= 0),
   idempotency_key varchar(80) NOT NULL UNIQUE,
+  inventory_reserved boolean NOT NULL DEFAULT false,
+  inventory_committed boolean NOT NULL DEFAULT false,
+  payment_reference uuid,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );

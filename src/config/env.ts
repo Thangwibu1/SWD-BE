@@ -30,6 +30,7 @@ const envSchema = z.object({
   DOCKER_BIN: z.string().default('docker'),
   DOCKER_PROJECT_PREFIX: z.literal('bench').default('bench'),
   SUT_HOST: z.string().default('127.0.0.1'),
+  SUT_CONTROL_NETWORK: z.string().default(''),
   SUT_PORT_RANGE_START: z.coerce.number().int().default(20000),
   SUT_PORT_RANGE_END: z.coerce.number().int().default(21000),
   MAX_CONCURRENT_EXPERIMENTS: z.coerce.number().int().min(1).max(1).default(1),
@@ -45,6 +46,7 @@ const envSchema = z.object({
   DEFAULT_COOLDOWN_SECONDS: z.coerce.number().int().nonnegative().default(60),
   DEFAULT_REPETITIONS: z.coerce.number().int().positive().default(5),
   EVENTUAL_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  MAX_ARTIFACT_FILE_BYTES: z.coerce.number().int().min(1_048_576).default(536_870_912),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

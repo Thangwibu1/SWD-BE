@@ -1,0 +1,50 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Architecture Evaluator API", "version": "0.1.0" },
+  "servers": [{ "url": "/api/v1" }],
+  "paths": {
+    "/candidates/validate": { "post": { "responses": { "200": { "description": "Validation result" } } } },
+    "/candidates": { "get": { "responses": { "200": { "description": "Candidate list" } } } },
+    "/candidates/{id}": { "get": { "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "description": "Candidate" }, "404": { "$ref": "#/components/responses/Error" } } } },
+    "/experiments": {
+      "get": { "parameters": [
+        { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100 } },
+        { "name": "offset", "in": "query", "schema": { "type": "integer", "minimum": 0 } },
+        { "name": "status", "in": "query", "schema": { "type": "string" } },
+        { "name": "architectureId", "in": "query", "schema": { "type": "string", "pattern": "^A(?:0[1-9]|1[0-2])$" } },
+        { "name": "workloadProfile", "in": "query", "schema": { "enum": ["BROWSING_V1", "MIXED_V1", "CHECKOUT_V1", "FLASH_SALE_V1"] } },
+        { "name": "modelName", "in": "query", "schema": { "type": "string", "maxLength": 120 } },
+        { "name": "search", "in": "query", "schema": { "type": "string", "maxLength": 160 } },
+        { "name": "createdFrom", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+        { "name": "createdTo", "in": "query", "schema": { "type": "string", "format": "date-time" } }
+      ], "responses": { "200": { "description": "Paginated experiment list plus dashboard summary" }, "400": { "$ref": "#/components/responses/Error" } } },
+      "post": { "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "experiment-request" } } } }, "responses": { "202": { "description": "Queued" }, "400": { "$ref": "#/components/responses/Error" }, "422": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/experiments/{id}": { "get": { "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "description": "Experiment" }, "404": { "$ref": "#/components/responses/Error" } } } },
+    "/experiments/{id}/results": { "get": { "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "description": "Results" } } } },
+    "/experiments/{id}/events": { "get": { "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "description": "SSE stream", "content": { "text/event-stream": {} } } } } },
+    "/experiments/{id}/cancel": { "post": { "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "description": "Cancellation requested" }, "409": { "$ref": "#/components/responses/Error" } } } },
+    "/experiments/{id}/artifacts": { "get": { "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "description": "Artifacts" } } } },
+    "/experiments/{experimentId}/artifacts/{artifactId}/download": { "get": { "parameters": [{ "name": "artifactId", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "experimentId", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Artifact bytes" }, "404": { "$ref": "#/components/responses/Error" } } } },
+    "/architectures": { "get": { "responses": { "200": { "description": "Registry" } } } },
+    "/architectures/{id}": { "get": { "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "description": "Profile" } } } },
+    "/architectures/{id}/experiments": { "post": { "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/IdempotencyKey" }], "responses": { "202": { "description": "Direct stress test queued" }, "400": { "$ref": "#/components/responses/Error" } } } },
+    "/workloads": { "get": { "responses": { "200": { "description": "Workloads" } } } },
+    "/cost-catalogs": { "get": { "responses": { "200": { "description": "Cost catalogs" } } } },
+    "/comparisons": { "post": { "responses": { "200": { "description": "Official comparison, Pareto and sensitivity" } } } },
+    "/health": { "get": { "responses": { "200": { "description": "Liveness" } } } },
+    "/ready": { "get": { "responses": { "200": { "description": "Ready" }, "503": { "description": "Not ready" } } } }
+  },
+  "components": {
+    "parameters": {
+      "Id": { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+      "IdempotencyKey": { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 1, "maxLength": 200 } }
+    },
+    "responses": {
+      "Error": { "description": "Error envelope", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    },
+    "schemas": {
+      "Error": { "type": "object", "required": ["code", "message", "requestId"], "properties": { "code": { "type": "string" }, "message": { "type": "string" }, "details": {}, "requestId": { "type": "string" } } }
+    }
+  }
+}

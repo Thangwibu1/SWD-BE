@@ -1,181 +1,210 @@
 # IMPLEMENTATION_STATUS — architecture-evaluation-backend
 
+Last verified: 2026-10-03. Reference: `../AGENT_IMPLEMENTATION_GUIDE.md`.
+
+The implementation for Phases 0–10 is present. Phase 10's automation is complete,
+but a publication-scale main campaign is an external execution deliverable and has
+not been fabricated or marked as run. It requires pilot-derived frozen inputs, a
+dated regional cost catalog, a generated main snapshot and roughly 520 hours for
+the default matrix.
+
 ## Phase 0 — Bootstrap
 
 ### Implemented
-
-- Độc lập Git repository, một `package.json` + `package-lock.json` ở root, không workspace.
-- Express + TypeScript strict (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `useUnknownInCatchVariables`).
-- `src/main.ts` dispatch theo `APP_ROLE`; role chưa đăng ký thì fail fast.
-- Env config validate bằng zod (`src/config/env.ts`), `.env.example` đúng mục 25.
-- Pino JSON logger có redact authorization/cookie/password/apiKey.
-- `X-Request-Id` middleware (chỉ nhận ID an toàn, ngược lại sinh UUID), error envelope `{code,message,details,requestId}`.
-- `/api/v1/health`, `/api/v1/ready`, CORS chỉ cho `CORS_ORIGINS`.
-- `src/healthcheck.ts` dùng cho Docker healthcheck.
-- ESLint (typescript-eslint), Prettier, Vitest.
-- `versions.env` pin mọi image/tool, không dùng `latest`.
-- Dockerfile multi-stage, một image cho mọi role, chạy non-root (uid 1000).
-- `.npmrc` `ignore-scripts=true` để `better-sqlite3` dùng prebuilt binary (xem ghi chú bên dưới).
-- GitHub Actions CI: npm ci, lint, build, unit, contract, registry validate (khi script tồn tại), docker build, integration job.
-- README hướng dẫn cài đặt local.
+- Independent backend/frontend repositories, strict TypeScript, pinned runtime and
+  images, lint/test/build scripts, CI and production Dockerfiles.
 
 ### Files changed
-
-- `package.json`, `package-lock.json`, `.npmrc`, `tsconfig.json`, `eslint.config.js`, `.prettierrc.json`, `.prettierignore`, `vitest.config.ts`
-- `.gitignore`, `.dockerignore`, `.env.example`, `versions.env`, `Dockerfile`, `README.md`
-- `.github/workflows/ci.yml`
-- `src/main.ts`, `src/healthcheck.ts`, `src/config/env.ts`
-- `src/api/app.ts`, `src/api/middleware/cors.ts`, `src/api/middleware/error-handler.ts`
-- `src/utils/logger.ts`, `src/utils/request-id.ts`, `src/utils/errors.ts`
-- `tests/unit/bootstrap.test.ts`
+- `package.json`, `Dockerfile`, `.github/workflows/ci.yml`, `.env.example`,
+  `versions.env`, and the corresponding frontend files.
 
 ### Verification
-
-- Fresh copy (không `node_modules`/`dist`) + `npm ci`: PASS (305 packages, better-sqlite3 load SQLite 3.53.4)
-- `npm run lint`: PASS
-- `npm run build`: PASS
-- `npm run test`: PASS (7/7)
-- `npx prettier --check .`: PASS
-- `docker build`: PASS; container `controller-api` trả `/api/v1/health` 200, healthcheck exit 0, uid 1000
+- Backend lint/typecheck/build and frontend lint/test/build pass.
 
 ### Remaining blockers
+- None in code.
 
-- `registry:validate`, `db:*`, `candidate:validate`, `experiment:smoke`, `report:rebuild` scripts chưa có file; sẽ được thêm ở Phase 1/6/8. CI chỉ chạy `registry:validate` khi file tồn tại.
-- Mạng tới Docker Hub/npm registry đôi lúc timeout trên máy dev; build thành công sau khi retry.
-- Ghi chú: `npm ci` tự suy ra script `node-gyp rebuild` cho better-sqlite3 vì lockfile không lưu `gypfile: false`; `.npmrc ignore-scripts=true` tránh cần C++ toolchain. Nếu sau này có dependency cần install script, phải xem lại quyết định này.
-
-## Phase 1 — Data và contract
+## Phase 1 — Data and contract
 
 ### Implemented
-- `database/sut-migrations/001_ecommerce_schema.sql`: đúng 5 bảng `users`, `products`, `inventory`, `orders`, `order_items` theo mục 6.1 (constraint, index giữ nguyên). Migrator chỉ chạy trên DB rỗng, không có bảng migration-tracking nên SUT luôn đúng 5 bảng.
-- Seed generator deterministic (mulberry32 PRNG, seed mặc định `20261001`): pilot 1k/2k/5k/15k, main 50k/20k/200k/600k; product popularity theo Zipf (s = 1.07) qua hoán vị seeded; dữ liệu lịch sử ở trạng thái terminal; `total_amount = Σ quantity × unit_price`.
-- Checksum hai chiều: tính trên dataset trong bộ nhớ và tính trong PostgreSQL theo cùng định dạng canonical → chứng minh seed/restore khớp từng byte. Ghi `database/seed/<profile>-<seed>.checksum.json` (có hot SKUs cho FLASH_SALE).
-- Snapshot/restore: `pg_dump`/`pg_restore` custom format chạy trong container postgres bằng `docker exec` (execa argument array), manifest có sha256 + size + dataset checksum. Restore kiểm tra sha256 trước, kiểm tra dataset checksum sau; sai → throw.
-- Scripts: `db:sut:migrate`, `db:sut:seed` (`--profile`, `--seed`, `--snapshot`), `db:sut:reset`; dev PostgreSQL compose `infra/dev/postgres.compose.yaml` (tmpfs, bind 127.0.0.1).
-- `schemas/sut-openapi.json` (OpenAPI 3.1) cho đúng 15 endpoint, `X-Request-Id` bắt buộc, `Idempotency-Key` cho checkout, 201/202 cho checkout, error envelope chung.
-- `SutContractValidator` (Ajv 2020 strict, không coerce, không remove additional) để validate response của mọi architecture.
-- Domain error catalogue dùng chung (`DomainError`, code/status ổn định, tập business error code cho k6 phân loại).
-- SUT HTTP shell dùng chung: request ID (AsyncLocalStorage để propagate sang call/event downstream), body limit 64 KiB, envelope, 404.
-- `npm run typecheck` (src + scripts + tests) và thêm vào CI.
+- Exactly five SUT business tables; deterministic pilot/main generators;
+  checksum, snapshot, restore and reset; SUT/evaluator OpenAPI; request IDs and
+  stable error envelopes.
+- Experiment requests select `pilot` or `main`; missing snapshots fail before a
+  candidate or run is queued.
 
 ### Files changed
-- `database/sut-migrations/001_ecommerce_schema.sql`, `database/seed/pilot-20261001.checksum.json`
-- `src/sut/shared/database/{pool,migrator,snapshot,reset}.ts`, `src/sut/shared/database/seed/{prng,dataset,checksum,loader}.ts`
-- `src/sut/shared/contracts/{routes,openapi-validator}.ts`, `src/sut/shared/errors/domain-errors.ts`, `src/sut/shared/http/sut-http.ts`, `src/sut/shared/observability/request-context.ts`
-- `schemas/sut-openapi.json`
-- `scripts/{migrate-sut,seed-sut,reset-sut}.ts`, `scripts/lib/cli.ts`, `infra/dev/postgres.compose.yaml`
-- `tests/unit/dataset.test.ts`, `tests/contract/{sut-openapi,sut-http-shell}.test.ts`, `tests/integration/dataset-reset.test.ts`, `tests/integration/helpers/dev-postgres.ts`
-- `package.json` (scripts `typecheck`, `db:sut:reset`), `tsconfig.scripts.json`, `.github/workflows/ci.yml`, `README.md`
+- `database/`, `schemas/`, `src/sut/shared/database/`, API middleware/controllers.
 
 ### Verification
-- `npm run lint`: PASS
-- `npm run typecheck`: PASS
-- `npm run build`: PASS
-- `npm run test`: PASS (5 files, 31 tests — unit 14, contract 13, integration 4 trên PostgreSQL 16.10 thật)
-- `prettier --check`: PASS
-- Dataset checksum ổn định: pilot seed 20261001 = `7a92818881f7a45447b856ab3fc2d9b9d70dc59dbbca150875ed15916141633e`, trùng nhau qua 2 lần seed độc lập, có golden test.
-- `db:sut:seed --snapshot` pilot: ~1.5 s, dump 1.17 MB; làm bẩn DB rồi `db:sut:reset`: checksum khôi phục đúng (~0.4 s).
-- Dump bị sửa 1 byte → reset từ chối (sha256 mismatch).
-- Migrator từ chối DB không rỗng; constraint chặn stock âm và trùng `idempotency_key`.
+- Contract tests pass; the checked-in pilot snapshot restores and verifies by
+  SHA-256 and logical dataset checksum during real smoke runs.
 
 ### Remaining blockers
-- Seed profile `main` chưa chạy thực tế (sẽ chạy ở Phase 10); generator đã có unit test kích thước.
-- Snapshot `.dump` bị `.gitignore` (binary, tái tạo deterministic); manifest + checksum JSON được commit.
+- Generate `main-20261001.dump` before a main campaign.
 
 ## Phase 2 — A01/A02
 
 ### Implemented
-- **SUT config** (`src/config/sut-env.ts`): validate `DATABASE_URL`, `REDIS_URL`, `ARCHITECTURE_ID`, `SUT_PORT`, `DB_POOL_MAX` bằng zod. Tách biệt khỏi evaluator config.
-- **Shared business router** (`src/sut/shared/router/business-router.ts`): map đủ 15 endpoint theo OpenAPI spec, dùng `SutApis` interface — shared giữa monolith/REST/event families.
-- **Auth module** (`src/sut/monolith/auth-module.ts`): login mock (sha256 hash khớp seed), `userExists`.
-- **Catalog module** (`src/sut/monolith/catalog-module.ts`): list (filter category, paginate), search (ILIKE), get. Reads qua `ProductCache` (NullProductCache cho A01, RedisProductCache cho A02).
-- **Inventory module** (`src/sut/monolith/inventory-module.ts`): public `InventoryApi.get()` + internal transactional ops `reserveStock` (SELECT FOR UPDATE + optimistic version), `releaseStock`, `commitStock` cho monolith checkout.
-- **Cart module** (`src/sut/monolith/cart-module.ts`): `CartStore` abstraction → `MemoryCartStore` (A01), `RedisCartStore` (A02). Cart không phải DB table (theo guide §6).
-- **Order module** (`src/sut/monolith/order-module.ts`): checkout synchronous trong **một PostgreSQL transaction** (lock inventory → reserve → create order + items → payment → confirm/fail → commit/rollback). Idempotency replay (INV-02). Cancel với stock release (INV-05). `total_amount = Σ qty × unit_price` (INV-03).
-- **Payment module** (`src/sut/monolith/payment-module.ts`): configurable mock (SUCCESS/FAIL/TIMEOUT), INV-04 idempotency (in-memory ledger, duplicate detection per orderId).
-- **Product cache** (`src/sut/monolith/product-cache.ts`): `ProductCache` interface → `NullProductCache` (A01 no-op) + `RedisProductCache` (A02 TTL cache).
-- **Redis cache** (`src/sut/monolith/redis-cache.ts`): `RedisProductCache` (key/value + TTL), `RedisCartStore` (Redis Hash per user), `connectRedis()`.
-- **Monolith bootstrap** (`src/sut/monolith/bootstrap.ts`): wire modules dựa trên `ARCHITECTURE_ID` — A01 (no cache, memory cart) vs A02+ (Redis cache + Redis cart). Graceful shutdown.
-- `src/main.ts`: đăng ký `sut-monolith` role trong BOOTSTRAPS table.
-- **Architecture registry** (`architecture-registry/`):
-  - `registry.schema.json`: JSON Schema cho Axx.yaml entries.
-  - `A01.yaml`: Monolith baseline — 1.25 vCPU + 2304 MiB app, 0.75 vCPU + 1792 MiB pg. Tổng 2.0/4096.
-  - `A02.yaml`: Monolith + Redis — 1.0/1792 app, 0.5/1536 pg, 0.5/768 redis. Tổng 2.0/4096.
-- **SUT compose templates** (`infra/sut-templates/`):
-  - `monolith.compose.yaml` (A01): app + postgres.
-  - `monolith-cached.compose.yaml` (A02): app + postgres + redis.
-- **Registry validator** (`scripts/validate-registry.ts`): validate schema + resource quota (sum cpus ≤ 2.0, sum memory ≤ 4096 MiB).
-
-### Tests added
-- `tests/unit/money.test.ts` (16 tests): cents conversion, order total (INV-03).
-- `tests/unit/order-rules.test.ts` (21 tests): state machine transitions (INV-07), cancellation rules, item uniqueness, idempotency comparison.
-- `tests/integration/monolith-api.test.ts` (25 tests): full API test trên PostgreSQL thật, cover cả 15 endpoints + business error paths.
-- `tests/integration/invariants.test.ts` (8 tests): INV-01 (non-negative stock), INV-02 (idempotency), INV-03 (total), INV-05 (cancel stock release), INV-06 (concurrent oversell), INV-07 (terminal state).
+- Modular monolith roles, PostgreSQL transactions, Redis cache/cart, idempotent
+  order creation and INV-01…INV-07 oracle coverage.
 
 ### Files changed
-- `src/config/sut-env.ts`
-- `src/sut/shared/router/business-router.ts`
-- `src/sut/monolith/{bootstrap,auth-module,catalog-module,inventory-module,cart-module,order-module,payment-module,product-cache,redis-cache}.ts`
-- `src/main.ts` (thêm sut-monolith role)
-- `architecture-registry/{registry.schema.json,A01.yaml,A02.yaml}`
-- `infra/sut-templates/{monolith.compose.yaml,monolith-cached.compose.yaml}`
-- `scripts/validate-registry.ts`
-- `tests/unit/{money,order-rules}.test.ts`
-- `tests/integration/{monolith-api,invariants}.test.ts`
+- `src/sut/monolith/`, shared HTTP/database code and monolith templates.
 
 ### Verification
-- `npm run lint`: PASS
-- `npm run typecheck`: PASS
-- `npm run build`: PASS
-- `npm run test`: PASS (9 files, **101 tests** — unit 51, contract 13, integration 37)
-- `npm run registry:validate`: PASS (A01 + A02 valid)
-- INV-01: stock non-negative enforced by DB constraints + checkout logic.
-- INV-02: idempotency key replay 5× → exactly 1 order in DB.
-- INV-03: `total_amount = Σ qty × unit_price` verified on all seeded + new orders.
-- INV-05: cancel → stock restored to pre-checkout level.
-- INV-06: 10 concurrent buyers, 5 available → max 5 succeed, stock non-negative.
-- INV-07: CANCELLED/FAILED orders reject cancel.
+- Unit/contract/integration coverage and real A01 Docker smoke completed.
 
 ### Remaining blockers
-- Redis integration test (A02 mode) chưa có — cần Redis container. Unit tests cover `MemoryCartStore`; `RedisCartStore` tested implicitly qua interface contract.
-- `supertest` chưa có trong `devDependencies` — test chạy nhờ vitest auto-resolve. Sẽ thêm explicit dependency nếu CI fail.
+- None.
 
 ## Phase 3 — A03/A04
 
 ### Implemented
-- **API Gateway proxy (`src/sut/gateway/bootstrap.ts`)**: Round-robin HTTP reverse proxy using Node.js `http`/`https` modules, routing traffic to downstream Monolith instances based on `MONOLITH_URL`. Handles timeouts, liveness, and readiness probes. Registered role `api-gateway` in `main.ts`.
-- **Async Notification Mock (`src/sut/services/notification/bootstrap.ts`)**: Fire-and-forget notification receiver returning 202 Accepted. Registered role `notification-mock` in `main.ts`.
-- **Monolith Async Notifications (`src/sut/monolith/order-module.ts`, `src/sut/monolith/bootstrap.ts`)**: Order module now accepts an optional `sendNotification` callback. Monolith bootstrap injects an async HTTP call to `NOTIFICATION_URL` after a successful checkout if configured.
-- **Architecture Registry A03 & A04**:
-  - `architecture-registry/A03.yaml`: Monolith with API Gateway (2 replicas), Redis Cache, no messaging. Total resource quota correctly assigned (api-gateway: 0.2/256, sut-monolith: 0.5/896, sut-monolith-2: 0.5/896, postgres: 0.5/1280, redis: 0.3/768).
-  - `architecture-registry/A04.yaml`: Monolith with API Gateway (2 replicas), Redis Cache, and Async Notification mock. Quota dynamically split to include notification-mock (api-gateway: 0.2/256, sut-monolith: 0.5/896, sut-monolith-2: 0.5/896, notification-mock: 0.1/128, postgres: 0.4/1152, redis: 0.3/768).
-- **SUT Compose Templates (`infra/sut-templates/`)**:
-  - `monolith-proxy.compose.yaml` (A03): `api-gateway`, 2 `sut-monolith` instances, `postgres`, `redis`.
-  - `monolith-proxy-async.compose.yaml` (A04): `api-gateway`, 2 `sut-monolith` instances, `notification-mock`, `postgres`, `redis`.
-- Updates to `sut-env.ts` to validate new environment variables (`MONOLITH_URL`, `NOTIFICATION_URL`).
+- Stateless replicas, proxy-compatible routing, shared state, cache correctness
+  and asynchronous notification behavior.
 
 ### Files changed
-- `src/config/sut-env.ts`
-- `src/sut/monolith/bootstrap.ts`, `src/sut/monolith/order-module.ts`
-- `src/main.ts`
-- `src/sut/gateway/bootstrap.ts` (new)
-- `src/sut/services/notification/bootstrap.ts` (new)
-- `architecture-registry/A03.yaml` (new), `architecture-registry/A04.yaml` (new)
-- `infra/sut-templates/monolith-proxy.compose.yaml` (new), `infra/sut-templates/monolith-proxy-async.compose.yaml` (new)
+- Registry A03/A04, compose templates and SUT bootstrap modules.
 
 ### Verification
-- `npm run registry:validate`: PASS (A01-A04 all valid under resource limits).
-- `npm run test`: PASS (101 tests passed, verifying new code didn't break invariants or API contract).
-- Monolith gracefully handles optional async notifications without degrading synchronous checkout performance.
+- Registry validation, parity/integration tests and deterministic compose render.
 
+### Remaining blockers
+- None.
 
-
-## Phase 4 � A05�A08
+## Phase 4 — A05–A08
 
 ### Implemented
-- [x] Ph�n t�ch th�nh c�c REST microservices d?c l?p: \user-service\, \catalog-service\, \inventory-service\, \order-service\, \payment-mock\.
-- [x] \order-service\ orchestrate qua HTTP fetch t?i \inventory-service\ v� \payment-mock\ thay v� g?i method in-process.
-- [x] Kh?i t?o c�c file Compose cho \A05\, \A06\ (REST_CACHED), \A07\ (Catalog scaled), \A08\ (Order scaled).
-- [x] Gateway load balancer h? tr? d?nh tuy?n theo path (\/auth\, \/products\, \/orders\, v.v.) v� chia t?i round-robin cho nhi?u replica (A07/A08).
-- [x] To�n b? code compile pass v� vu?t qua strict validation c?a Registry Validator (RAM/CPU budgets).
+- REST gateway/services, propagated request IDs, timeouts/error envelopes and
+  catalog/order scaling variants with the same 15-endpoint contract.
 
+### Files changed
+- `src/sut/gateway/`, `src/sut/services/`, REST templates and registry profiles.
+
+### Verification
+- API parity integration suite and all 12 registry profiles validate.
+
+### Remaining blockers
+- None.
+
+## Phase 5 — A09–A12
+
+### Implemented
+- RabbitMQ publisher confirms, manual ack, durable messages, consumer idempotency,
+  deterministic payment reference, redelivery and compensation/replay.
+- `order.created` is published only after database commit; pending sagas can be
+  replayed without duplicate stock or payment effects.
+
+### Files changed
+- `src/sut/shared/events/`, `src/sut/shared/messaging/`, event services/templates,
+  event JSON schemas and event integration tests.
+
+### Verification
+- Duplicate/redelivery/failure tests pass. Real A10 Docker smoke passed all
+  INV-01…INV-07 after the transaction/event race fix.
+
+### Remaining blockers
+- None.
+
+## Phase 6 — Evaluator core
+
+### Implemented
+- SQLite metadata/migrations, two-layer validator, immutable registry, worker state
+  machine, leases/heartbeats, idempotent API, dynamic ports, exact Compose cleanup,
+  cancellation, crash recovery and one infrastructure-only retry.
+- Controller and worker are separate processes. Production API has no Docker socket.
+- Direct `POST /architectures/:id/experiments` path enables testing any A01–A12
+  without an AI prompt.
+
+### Files changed
+- `src/metadata/`, `src/evaluator/`, `src/worker/`, evaluator API/routes and deploy compose.
+
+### Verification
+- Contract and lease tests pass; A01/A10 real smoke experiments reached terminal
+  states and cleaned their exact Compose projects.
+
+### Remaining blockers
+- None.
+
+## Phase 7 — Measurement
+
+### Implemented
+- Four k6 constant-arrival-rate workloads, five-way error breakdown, local/SSH
+  runner, generator CPU guard, duration/sample/coverage validity gates,
+  Prometheus file discovery, app metrics and cAdvisor/container evidence.
+- Raw k6, Prometheus, app, container, logs and environment evidence are archived.
+
+### Files changed
+- `workloads/k6/`, load runner, metrics collector, observation compose/config.
+
+### Verification
+- Measurement parser/unit tests pass; real smoke saved Prometheus evidence and
+  reported 100% metric coverage with zero dropped iterations at its smoke load.
+
+### Remaining blockers
+- Publication pilot loads must be calibrated on the target hosts.
+
+## Phase 8 — Evaluation engines
+
+### Implemented
+- INV-01…INV-07 oracle, Decimal cost engine, hard/measurement-validity gates,
+  p5/p95 scoring, confidence intervals, Pareto, regret, sensitivity and
+  deterministic HTML/JSON/CSV report plus SHA-256 artifact manifest.
+
+### Files changed
+- Oracle/cost/score/statistics/report modules and evaluator golden tests.
+
+### Verification
+- Golden/unit tests pass; archived reports rebuild deterministically.
+
+### Remaining blockers
+- Publication conclusions require dated prices and completed evidence.
+
+## Phase 9 — React UI
+
+### Implemented
+- Dashboard, seven-step New Experiment, Experiments, eight-tab Detail, Comparison,
+  Architectures and Settings pages; SSE reconnect with polling fallback; cancel
+  confirmation; checksummed artifact links.
+- Every architecture card has a Stress test action and uses the direct backend path.
+  Official cost/scores remain backend-owned.
+
+### Files changed
+- Independent `architecture-evaluation-frontend` application and E2E tests.
+
+### Verification
+- Frontend unit tests and 4/4 Playwright tests pass, including direct A01 queueing.
+
+### Remaining blockers
+- None.
+
+## Phase 10 — Pilot and main experiment
+
+### Implemented
+- Seeded block-randomized 48-job pilot/main protocols, three/five repetitions,
+  frozen-input persistence, retry policy, pilot calibration, main preflight and
+  aggregate CI/Pareto/regret/model-metrics/limitations report.
+- Main non-dry-run is blocked until 4–6 pilot-derived loads, a non-development
+  bounds version, a dated non-research catalog and the main snapshot are installed.
+
+### Files changed
+- `protocols/`, `scripts/run-protocol.ts`, `scripts/calibrate-pilot.ts`,
+  `scripts/aggregate-protocol.ts`, `docs/phase10-protocol.md`.
+
+### Verification
+- Both protocol dry runs validate 48 randomized jobs; pilot snapshot is present.
+
+### Remaining blockers
+- Execute pilot on the deployment hosts, freeze its outputs, provide the real
+  regional catalog, generate the main snapshot, run the long main campaign and
+  archive its evidence. These are experiment operations, not missing runtime code.
+
+## Current verification snapshot
+
+- Backend: typecheck PASS; lint PASS after final re-run; unit 52/52; contract 18/18;
+  registry 12/12; protocol dry-runs PASS.
+- Frontend: Playwright 4/4; unit/lint/build PASS after final re-run.
+- Docker integration was last fully verified at 138/138 and real A01/A10 smoke runs
+  completed. Docker Desktop was unavailable during the final 2026-10-03 re-check,
+  so the final static change set could not be re-run against a live engine.

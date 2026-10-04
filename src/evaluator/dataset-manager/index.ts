@@ -1,5 +1,47 @@
 import { execa } from 'execa';
 import type { Logger } from '../../utils/logger.js';
+import pg from 'pg';
+import { readSnapshotManifest, restoreSnapshot, checksumsEqual } from '../../sut/shared/database/snapshot.js';
+import { checksumDatabase } from '../../sut/shared/database/seed/checksum.js';
+import { composeEnvironment } from '../docker-runner/index.js';
+import { Database } from '../../sut/shared/database/db.js';
+import { clearReliabilityState } from '../../sut/shared/database/reliability.js';
+
+export async function restoreComposeDataset(options: {
+  runId: string;
+  composeFilePath: string;
+  databaseUrl: string;
+  profile?: 'pilot' | 'main' | 'capacity';
+  seed?: number;
+  logger: Logger;
+}): Promise<void> {
+  const { runId, composeFilePath, databaseUrl, logger } = options;
+  const dockerBin = process.env['DOCKER_BIN'] ?? 'docker';
+  const projectName = `bench-${runId}`;
+  const ps = await execa(dockerBin, [
+    'compose', '-p', projectName, '-f', composeFilePath, 'ps', '-q', 'postgres',
+  ], { env: composeEnvironment() });
+  const container = ps.stdout.trim();
+  if (!container) throw new Error(`PostgreSQL container not found for ${projectName}`);
+  const manifest = await readSnapshotManifest(options.profile ?? 'pilot', options.seed ?? 20261001);
+  logger.info({ projectName, snapshot: manifest.file }, 'Restoring deterministic SUT dataset');
+  await restoreSnapshot({ dockerBin, container, user: 'bench', database: 'ecommerce' }, manifest);
+  const reliabilityPool = new pg.Pool({ connectionString: databaseUrl });
+  try { await clearReliabilityState(new Database(reliabilityPool)); }
+  finally { await reliabilityPool.end(); }
+
+  const client = new pg.Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    const restored = await checksumDatabase(client);
+    if (!checksumsEqual(restored, manifest.checksum)) {
+      throw new Error(`Restored dataset checksum mismatch: ${restored.combined}`);
+    }
+  } finally {
+    await client.end();
+  }
+  logger.info({ checksum: manifest.checksum.combined }, 'SUT dataset restore verified');
+}
 
 /**
  * Restore SUT PostgreSQL database to the seeded snapshot state.
@@ -58,27 +100,26 @@ export async function resetSutDatabase(
  * Flush Redis cache and purge RabbitMQ queues.
  */
 export async function flushExternalState(
-  redisUrl: string | undefined,
-  rabbitmqUrl: string | undefined,
+  projectName: string,
+  hasRedis: boolean,
+  hasRabbitMQ: boolean,
   logger: Logger,
 ): Promise<void> {
-  if (redisUrl) {
+  if (hasRedis) {
     logger.info('Flushing Redis');
     try {
-      // Use redis-cli to flush
-      const url = new URL(redisUrl);
-      await execa('docker', [
-        'exec', '-i',
-        // Find the redis container in the bench project
-        `$(docker ps -q --filter "label=com.docker.compose.service=redis" --filter "status=running" | head -1)`,
-        'redis-cli', 'FLUSHALL',
-      ], { shell: true, reject: false, timeout: 10000 });
+      const dockerBin = process.env['DOCKER_BIN'] ?? 'docker';
+      const ps = await execa(dockerBin, ['ps', '-q',
+        '--filter', `label=com.docker.compose.project=${projectName}`,
+        '--filter', 'label=com.docker.compose.service=redis'], { reject: false });
+      const container = ps.stdout.trim().split(/\r?\n/)[0];
+      if (container) await execa(dockerBin, ['exec', container, 'redis-cli', 'FLUSHALL'], { timeout: 10000 });
     } catch {
       logger.warn('Redis flush failed');
     }
   }
 
-  if (rabbitmqUrl) {
+  if (hasRabbitMQ) {
     logger.info('Purging RabbitMQ queues');
     // RabbitMQ queues are fresh per deploy since we use --volumes on cleanup
   }

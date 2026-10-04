@@ -1,0 +1,58 @@
+{
+  "profile": "capacity",
+  "seed": 20261001,
+  "counts": {
+    "users": 50000,
+    "products": 20000,
+    "inventory": 20000,
+    "orders": 200000,
+    "order_items": 600000
+  },
+  "checksum": {
+    "tables": {
+      "users": {
+        "rows": 50000,
+        "sha256": "6fa48701e781ef80c22f876a81dcce2cae656bcc9aa35d3be25ce6b74578cc1d"
+      },
+      "products": {
+        "rows": 20000,
+        "sha256": "9b844c3aac0a4654cf62178b92b797392bbd16b2fd18a67d77a2cd0ae9decc1f"
+      },
+      "inventory": {
+        "rows": 20000,
+        "sha256": "3bb8d8f7ba809637100c40cdf4b71c82a487b692fabd045754f89e1109c780a1"
+      },
+      "orders": {
+        "rows": 200000,
+        "sha256": "4995e5df209a521918ada8a8a25ab6a43abccf0ac2f3b6790ccb5fa49c7a5577"
+      },
+      "order_items": {
+        "rows": 600000,
+        "sha256": "59293938e905d08a390eaa0889a3f3f1e3084e77b8290012584d93c24ed0ee7e"
+      }
+    },
+    "combined": "bd574c56c2e12fedff66de4fab978cd8feaaee413e05a55559bb0c1c56d92ad4"
+  },
+  "hotSkus": [
+    "9b429b76-5602-4dde-ad8f-8cdb3d95af4b",
+    "1d6cdf7e-d33d-4c00-839a-6a79814ef1ea",
+    "cca55b1b-be72-4880-9e29-b804b39ad50c",
+    "c98aef82-e4b5-49c9-8a78-ed6486abbe4c",
+    "d27ebb8c-4cb4-4ff5-94fa-33c831d121be",
+    "be023758-df7e-4a5f-8a55-950aa9781a98",
+    "469f04f6-e157-46da-b704-fa8691f48f0c",
+    "3f230c42-7d56-4631-b479-a6538ca2ebf6",
+    "790dbee9-2cb1-4596-880f-d3d34f066381",
+    "d822b54e-30f7-4e59-968d-1a27e6df66db",
+    "815ac145-ef47-40c4-abd2-2ba54c6f712c",
+    "220eaddb-6b67-4279-ba2a-71a28ba41db1",
+    "241c1875-76e9-4758-845b-194bf48f4827",
+    "f4ecf974-7af1-4bb7-ad47-99b69139e5ab",
+    "dec4b76d-4090-4873-b4d6-9c4400dc2273",
+    "937de401-fecf-49ba-9044-2d986fbe8571",
+    "16bfe673-30dc-4f4e-b998-924d7f449571",
+    "a2472f20-d404-4b1f-a551-dac8d7de2087",
+    "4d9549e7-95bd-49f1-b4e7-45b1d53f41ac",
+    "b8d8f2b9-9938-432c-8e0b-d58431be7fa9"
+  ]
+}

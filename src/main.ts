@@ -7,7 +7,11 @@ type Bootstrap = (config: AppConfig, logger: Logger) => Promise<void>;
 
 async function bootstrapControllerApi(config: AppConfig, logger: Logger): Promise<void> {
   const { createApp } = await import('./api/app.js');
-  const app = createApp({ config, logger });
+  const { getEvaluatorDb } = await import('./metadata/sqlite.js');
+  const app = createApp({ config, logger, readinessProbes: [{
+    name: 'evaluator-metadata',
+    check: () => Boolean(getEvaluatorDb().prepare('SELECT 1 AS ok').get()),
+  }] });
   const server = app.listen(config.API_PORT, config.API_HOST, () => {
     logger.info({ host: config.API_HOST, port: config.API_PORT }, 'Evaluator API listening');
   });
@@ -64,12 +68,18 @@ async function bootstrapEventWorker(config: AppConfig, logger: Logger): Promise<
   await boot(config, logger);
 }
 
+async function bootstrapExperimentWorker(config: AppConfig, logger: Logger): Promise<void> {
+  const { startWorkerLoop } = await import('./worker/worker-loop.js');
+  await startWorkerLoop(config, logger);
+}
+
 /**
  * Role table. Roles are registered here as their phase lands; an unknown or
  * not-yet-registered role fails fast instead of silently starting nothing.
  */
 const BOOTSTRAPS: Partial<Record<AppRole, Bootstrap>> = {
   'controller-api': bootstrapControllerApi,
+  'experiment-worker': bootstrapExperimentWorker,
   'sut-monolith': bootstrapMonolith,
   'api-gateway': bootstrapGateway,
   'notification-mock': bootstrapNotificationMock,

@@ -1,5 +1,5 @@
 /**
- * npm run db:sut:seed -- [--profile pilot|main] [--seed 20261001] [--snapshot] [--container name]
+ * npm run db:sut:seed -- [--profile pilot|main|capacity] [--seed 20261001] [--snapshot] [--container name]
  *
  * 1. Generates the deterministic dataset (Zipf product popularity).
  * 2. Migrates + loads it into an EMPTY database (SUT_DATABASE_URL).
@@ -28,7 +28,7 @@ await runScript(async () => {
   const args = parseArgs();
   const profileName = (args.get('profile') ?? 'pilot') as DatasetProfileName;
   const profile = DATASET_PROFILES[profileName];
-  if (!profile) throw new Error(`Unknown profile ${profileName}; use pilot or main`);
+  if (!profile) throw new Error(`Unknown profile ${profileName}; use pilot, main, or capacity`);
   const seed = Number(args.get('seed') ?? DEFAULT_SEED);
   if (!Number.isSafeInteger(seed) || seed < 0)
     throw new Error('--seed must be a non-negative integer');

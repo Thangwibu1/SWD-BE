@@ -6,6 +6,8 @@ coverage
 .git
 .github
 .env
+infra/deploy/deploy.env
+infra/deploy/secrets
 *.log
 tests
-database/snapshots/*.dump
+# Immutable dataset snapshots are runtime inputs for every campaign profile.

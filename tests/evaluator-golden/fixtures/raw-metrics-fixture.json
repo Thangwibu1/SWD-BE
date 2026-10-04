@@ -1,0 +1,14 @@
+{
+  "summaryJsonPath": "results/test-run/raw/k6-summary.json",
+  "droppedIterations": 0,
+  "totalRequests": 30000,
+  "httpReqDuration": {
+    "p50": 45.2,
+    "p95": 89.6,
+    "p99": 125.4,
+    "avg": 52.3,
+    "max": 320.1
+  },
+  "httpReqFailed": 0.005,
+  "achievedRps": 50.2
+}

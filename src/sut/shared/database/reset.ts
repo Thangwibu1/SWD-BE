@@ -2,6 +2,8 @@ import type pg from 'pg';
 import { checksumDatabase } from './seed/checksum.js';
 import { readSnapshotManifest, restoreSnapshot, SNAPSHOT_DIR } from './snapshot.js';
 import type { PgContainerTarget } from './snapshot.js';
+import { Database } from './db.js';
+import { clearReliabilityState } from './reliability.js';
 
 export interface ResetOptions {
   pool: pg.Pool;
@@ -32,6 +34,7 @@ export async function resetFromSnapshot({
   const started = Date.now();
   const manifest = await readSnapshotManifest(profile, seed, snapshotDir);
   await restoreSnapshot(target, manifest, snapshotDir);
+  await clearReliabilityState(new Database(pool));
   const client = await pool.connect();
   try {
     const actual = await checksumDatabase(client);

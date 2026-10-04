@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architecture-evaluation.local/schemas/events/inventory-rejected.schema.json",
+  "title": "inventory.rejected Event Payload",
+  "description": "Emitted when inventory cannot reserve stock (insufficient quantity)",
+  "type": "object",
+  "required": ["orderId", "reason"],
+  "properties": {
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 240
+    },
+    "failedProducts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["productId", "requested", "available"],
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requested": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "available": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

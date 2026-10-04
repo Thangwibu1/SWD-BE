@@ -2,12 +2,12 @@
 // List 45%, detail 30%, search 15%, inventory 10%
 import http from 'k6/http';
 import { check } from 'k6';
-import { Rate } from 'k6/metrics';
-
-const errorRate = new Rate('business_errors');
+import { recordResponse } from './error-metrics.js';
 const BASE_URL = __ENV.SUT_BASE_URL || 'http://localhost:3000';
 
 export const options = {
+  discardResponseBodies: true,
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
   scenarios: {
     browsing: {
       executor: 'constant-arrival-rate',
@@ -32,28 +32,28 @@ function listProducts() {
   const page = Math.floor(Math.random() * 5) + 1;
   const res = http.get(`${BASE_URL}/products?page=${page}&limit=20`, { headers: headers(), tags: { operation: 'product_list' } });
   check(res, { 'list 200': (r) => r.status === 200 });
-  if (res.status >= 500) errorRate.add(1); else errorRate.add(0);
+  recordResponse(res);
 }
 
 function viewProduct() {
   if (!PRODUCT_IDS.length) return listProducts();
   const res = http.get(`${BASE_URL}/products/${pickRandom(PRODUCT_IDS)}`, { headers: headers(), tags: { operation: 'product_detail' } });
   check(res, { 'detail 200': (r) => r.status === 200 });
-  if (res.status >= 500) errorRate.add(1); else errorRate.add(0);
+  recordResponse(res);
 }
 
 function searchProducts() {
   const terms = ['laptop', 'phone', 'camera', 'headphones', 'tablet'];
   const res = http.get(`${BASE_URL}/products/search?q=${pickRandom(terms)}`, { headers: headers(), tags: { operation: 'search' } });
   check(res, { 'search 200': (r) => r.status === 200 });
-  if (res.status >= 500) errorRate.add(1); else errorRate.add(0);
+  recordResponse(res);
 }
 
 function checkInventory() {
   if (!PRODUCT_IDS.length) return listProducts();
   const res = http.get(`${BASE_URL}/inventory/${pickRandom(PRODUCT_IDS)}`, { headers: headers(), tags: { operation: 'inventory_check' } });
   check(res, { 'inv 200': (r) => r.status === 200 });
-  if (res.status >= 500) errorRate.add(1); else errorRate.add(0);
+  recordResponse(res);
 }
 
 export default function () {

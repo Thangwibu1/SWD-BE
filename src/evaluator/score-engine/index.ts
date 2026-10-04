@@ -1,4 +1,6 @@
 import type { Logger } from '../../utils/logger.js';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 export interface GateConfig {
   p99Ms: number;
@@ -30,11 +32,43 @@ export interface MetricValues {
   measurementDurationSeconds: number;
   sampleCount: number;
   metricCoveragePercent: number;
+  loadHostCpuPercent?: number;
+  expectedMeasurementDurationSeconds?: number;
+  minimumSampleCount?: number;
+  offeredRps?: number;
+  achievedOperationRps?: number;
 }
 
 export interface NormalizationBounds {
   lower: number;
   upper: number;
+}
+
+const REQUIRED_BOUND_KEYS = [
+  'p99_ms', 'error_rate', 'throughput_rps', 'monthly_cost_usd',
+  'cpu_efficiency', 'memory_peak_mib',
+] as const;
+
+export function loadNormalizationBounds(version: string): Record<string, NormalizationBounds> {
+  if (!/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(version)) {
+    throw new Error(`Invalid score bounds version: ${version}`);
+  }
+  const filePath = path.resolve('score-bounds', `${version}.json`);
+  const catalog = JSON.parse(readFileSync(filePath, 'utf8')) as {
+    version?: unknown;
+    bounds?: Record<string, { lower?: unknown; upper?: unknown }>;
+  };
+  if (catalog.version !== version || !catalog.bounds) {
+    throw new Error(`Score bounds catalog ${version} has an invalid version or bounds object`);
+  }
+  for (const key of REQUIRED_BOUND_KEYS) {
+    const bound = catalog.bounds[key];
+    if (!bound || typeof bound.lower !== 'number' || typeof bound.upper !== 'number'
+      || !Number.isFinite(bound.lower) || !Number.isFinite(bound.upper) || bound.lower >= bound.upper) {
+      throw new Error(`Score bounds catalog ${version} has invalid bounds for ${key}`);
+    }
+  }
+  return catalog.bounds as Record<string, NormalizationBounds>;
 }
 
 export interface DimensionScore {
@@ -71,6 +105,14 @@ export function checkGates(
     message: `P99 latency ${metrics.p99Ms.toFixed(2)}ms vs SLO ${slo.p99Ms}ms`,
   });
 
+  gates.push({
+    code: 'GATE_LOAD_GENERATOR_CPU',
+    passed: (metrics.loadHostCpuPercent ?? 0) <= 70,
+    observed: Math.round((metrics.loadHostCpuPercent ?? 0) * 10) / 10,
+    threshold: 70,
+    message: `Load-host CPU ${(metrics.loadHostCpuPercent ?? 0).toFixed(1)}% vs max 70%`,
+  });
+
   // Gate 2: Error rate meets threshold
   gates.push({
     code: 'GATE_ERROR_RATE',
@@ -87,6 +129,18 @@ export function checkGates(
     observed: metrics.droppedIterations,
     threshold: 0,
     message: `Dropped iterations: ${metrics.droppedIterations}`,
+  });
+
+  const minimumAchievedRatio = 0.95;
+  const achievedRatio = metrics.offeredRps && metrics.achievedOperationRps !== undefined
+    ? metrics.achievedOperationRps / metrics.offeredRps
+    : 1;
+  gates.push({
+    code: 'GATE_ACHIEVED_RATE',
+    passed: achievedRatio >= minimumAchievedRatio,
+    observed: Math.round(achievedRatio * 10_000) / 100,
+    threshold: minimumAchievedRatio * 100,
+    message: `Achieved operation rate ${(achievedRatio * 100).toFixed(2)}% of offered rate`,
   });
 
   // Gate 4: No critical invariant violations
@@ -108,12 +162,16 @@ export function checkGates(
   });
 
   // Gate 6: Measurement validity
+  const minimumDuration = (metrics.expectedMeasurementDurationSeconds ?? 0) * 0.95;
+  const minimumSamples = metrics.minimumSampleCount ?? 1;
   gates.push({
     code: 'GATE_MEASUREMENT_VALID',
-    passed: metrics.metricCoveragePercent >= 95,
-    observed: metrics.metricCoveragePercent,
-    threshold: 95,
-    message: `Metric coverage: ${metrics.metricCoveragePercent.toFixed(1)}%`,
+    passed: metrics.metricCoveragePercent >= 95
+      && metrics.measurementDurationSeconds >= minimumDuration
+      && metrics.sampleCount >= minimumSamples,
+    observed: `coverage=${metrics.metricCoveragePercent.toFixed(1)}%, duration=${metrics.measurementDurationSeconds.toFixed(1)}s, samples=${metrics.sampleCount}`,
+    threshold: `coverage>=95%, duration>=${minimumDuration.toFixed(1)}s, samples>=${minimumSamples}`,
+    message: `Metric coverage: ${metrics.metricCoveragePercent.toFixed(1)}%, duration: ${metrics.measurementDurationSeconds.toFixed(1)}s, samples: ${metrics.sampleCount}`,
   });
 
   const allPassed = gates.every(g => g.passed);
@@ -164,6 +222,7 @@ export function computeScores(
   bounds: Record<string, NormalizationBounds>,
   weights: Array<{ metric: string; weight: number }>,
   logger: Logger,
+  p99SloMs?: number,
 ): { dimensions: DimensionScore[]; weightedUtility: number | null } {
   const dimensions: DimensionScore[] = [];
 
@@ -183,10 +242,13 @@ export function computeScores(
 
   for (const def of dimensionDefs) {
     const b = bounds[def.boundsKey] ?? { lower: 0, upper: 100 };
+    const normalizedScore = def.dimension === 'p99_ms' && p99SloMs !== undefined && def.rawValue <= p99SloMs
+      ? 100
+      : normalizeMetric(def.rawValue, b, def.direction);
     dimensions.push({
       dimension: def.dimension,
       rawValue: def.rawValue,
-      normalizedScore: normalizeMetric(def.rawValue, b, def.direction),
+      normalizedScore,
       direction: def.direction,
       bounds: b,
     });
@@ -215,4 +277,52 @@ export function computeScores(
   }, 'Score computation complete');
 
   return { dimensions, weightedUtility };
+}
+
+/**
+ * Compute gates from load and oracle results, then compute scores.
+ */
+export function computeGates(
+  loadResult: { droppedIterations: number; httpReqDuration: { p99: number }; httpReqFailed: number },
+  oracleResult: { violations: Array<{ passed?: boolean; severity?: string }> },
+  slo: GateConfig,
+  logger: Logger,
+  validity: {
+    oomKills?: number;
+    unexpectedCrashes?: number;
+    measurementDurationSeconds?: number;
+    sampleCount?: number;
+    metricCoveragePercent?: number;
+    loadHostCpuPercent?: number;
+    expectedMeasurementDurationSeconds?: number;
+    minimumSampleCount?: number;
+    offeredRps?: number;
+    achievedOperationRps?: number;
+  } = {},
+): GatesOutput {
+  const criticalViolations = oracleResult.violations.filter(
+    (violation) => violation.passed === false && violation.severity === 'CRITICAL',
+  ).length;
+  const metrics: MetricValues = {
+    p99Ms: loadResult.httpReqDuration.p99,
+    errorRate: loadResult.httpReqFailed,
+    droppedIterations: loadResult.droppedIterations,
+    consistencyViolations: criticalViolations,
+    oomKills: validity.oomKills ?? 0,
+    unexpectedCrashes: validity.unexpectedCrashes ?? 0,
+    measurementDurationSeconds: validity.measurementDurationSeconds ?? 0,
+    sampleCount: validity.sampleCount ?? 0,
+    metricCoveragePercent: validity.metricCoveragePercent ?? 0,
+    loadHostCpuPercent: validity.loadHostCpuPercent ?? 100,
+    ...(validity.offeredRps !== undefined ? { offeredRps: validity.offeredRps } : {}),
+    ...(validity.achievedOperationRps !== undefined ? { achievedOperationRps: validity.achievedOperationRps } : {}),
+    ...(validity.expectedMeasurementDurationSeconds !== undefined
+      ? { expectedMeasurementDurationSeconds: validity.expectedMeasurementDurationSeconds }
+      : {}),
+    ...(validity.minimumSampleCount !== undefined
+      ? { minimumSampleCount: validity.minimumSampleCount }
+      : {}),
+  };
+
+  return checkGates(metrics, slo, logger);
 }

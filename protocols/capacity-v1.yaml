@@ -1,0 +1,19 @@
+version: capacity-v1
+seed: 20261001
+datasetProfile: capacity
+architectures: [A01, A02, A03, A04, A05, A06, A07, A08, A09, A10, A11, A12]
+workloads: [BROWSING_V1, MIXED_V1, CHECKOUT_V1, FLASH_SALE_V1]
+loadLevelsRps: [25, 50, 100, 250, 500, 1000, 2000, 4000, 7000, 10000]
+repetitions: 1
+warmupSeconds: 60
+measureSeconds: 120
+cooldownSeconds: 30
+costCatalogVersion: research-v1
+scoreBoundsVersion: development-v1
+slo: { p99Ms: 100, errorRateMax: 0.01, consistencyViolationsMax: 0 }
+randomization: seeded-block
+invalidRetryLimit: 1
+limitations:
+  - Capacity discovery is a screening run with one repetition per point.
+  - Freeze 4-6 informative load levels and run five repetitions in the main protocol.
+  - A dedicated load host is required above 500 operation RPS.

@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { validateCandidate } from '../../evaluator/architecture-validator/index.js';
-import { insertCandidate, getCandidateById, listCandidates } from '../../metadata/repositories/candidates.js';
+import { getCandidateById, listCandidates } from '../../metadata/repositories/candidates.js';
 
 export function validateCandidateController(req: Request, res: Response): void {
   try {

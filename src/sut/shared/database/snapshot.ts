@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
+import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { execa } from 'execa';
@@ -45,6 +45,40 @@ export function snapshotBaseName(profile: string, seed: number): string {
   if (!/^[a-z]+$/.test(profile) || !Number.isInteger(seed))
     throw new Error('Invalid snapshot identity');
   return `${profile}-${seed}`;
+}
+
+/**
+ * Fail fast before an experiment is queued when its immutable dataset is not
+ * installed. The dump is still SHA-256 verified immediately before restore;
+ * this check keeps a missing/misnamed snapshot from consuming a worker slot.
+ */
+export function assertSnapshotAvailable(
+  profile: 'pilot' | 'main' | 'capacity',
+  seed = 20261001,
+  dir = SNAPSHOT_DIR,
+): SnapshotManifest {
+  const base = snapshotBaseName(profile, seed);
+  const manifestPath = path.join(dir, `${base}.manifest.json`);
+  const dumpPath = path.join(dir, `${base}.dump`);
+  if (!existsSync(manifestPath) || !existsSync(dumpPath)) {
+    throw new Error(
+      `Dataset snapshot ${base} is not installed. Generate it with: npm run db:sut:seed -- --profile ${profile} --snapshot`,
+    );
+  }
+
+  let manifest: SnapshotManifest;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as SnapshotManifest;
+  } catch (error) {
+    throw new Error(
+      `Dataset snapshot manifest ${path.basename(manifestPath)} is invalid: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+  if (manifest.profile !== profile || manifest.seed !== seed || manifest.file !== `${base}.dump`) {
+    throw new Error(`Dataset snapshot manifest ${path.basename(manifestPath)} does not match ${base}`);
+  }
+  return manifest;
 }
 
 export async function sha256File(file: string): Promise<string> {

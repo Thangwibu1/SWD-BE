@@ -6,6 +6,7 @@ import { requestIdMiddleware } from '../../../utils/request-id.js';
 import { DomainError } from '../errors/domain-errors.js';
 import { toEnvelope } from '../../../utils/errors.js';
 import { runWithContext } from '../observability/request-context.js';
+import { getSutMetrics } from '../observability/metrics.js';
 
 /**
  * Common HTTP shell for every SUT role (monolith, gateway, services), so the
@@ -14,6 +15,7 @@ import { runWithContext } from '../observability/request-context.js';
  */
 export function createSutApp(logger: Logger): Express {
   const app = express();
+  const metrics = getSutMetrics();
   app.disable('x-powered-by');
   app.disable('etag');
   app.set('query parser', 'simple');
@@ -28,6 +30,19 @@ export function createSutApp(logger: Logger): Express {
     }),
   );
   app.use(express.json({ limit: '64kb' }));
+  app.get('/metrics', async (_req, res) => {
+    res.type(metrics.registry.contentType).send(await metrics.registry.metrics());
+  });
+  app.use((req, res, next) => {
+    const started = process.hrtime.bigint();
+    res.on('finish', () => {
+      const route = req.route?.path ? String(req.route.path) : req.path.replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, ':id');
+      const labels = { service: metrics.service, route, method: req.method };
+      metrics.httpRequests.inc({ ...labels, status: String(res.statusCode) });
+      metrics.httpDuration.observe(labels, Number(process.hrtime.bigint() - started) / 1e9);
+    });
+    next();
+  });
   return app;
 }
 

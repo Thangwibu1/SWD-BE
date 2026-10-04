@@ -72,13 +72,16 @@ export function buildManifest(
   experimentId: string,
   runId: string,
   logger: Logger,
+  generatedAt = process.env['SOURCE_DATE_EPOCH']
+    ? new Date(Number(process.env['SOURCE_DATE_EPOCH']) * 1000).toISOString()
+    : new Date().toISOString(),
 ): ManifestData {
   const artifacts = scanArtifacts(runDir).filter(a => a.relativePath !== 'manifest.json');
 
   const manifest: ManifestData = {
     experimentId,
     runId,
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     artifacts,
   };
 
@@ -99,11 +102,17 @@ export function buildReport(
     architectureId: string;
     workload: string;
     loadRps: number;
+    scoreBoundsVersion?: string;
+    protocolVersion?: string | null;
     metrics: Record<string, unknown>;
     cost: Record<string, unknown>;
     gates: Record<string, unknown>;
     scores: Record<string, unknown>;
     invariants: Record<string, unknown>;
+    confidenceIntervals?: Record<string, unknown>;
+    pareto?: Record<string, unknown>;
+    limitations?: string[];
+    generatedAt?: string;
   },
   logger: Logger,
 ): void {
@@ -117,6 +126,7 @@ export function buildReport(
   writeFileSync(path.join(derivedDir, 'cost.json'), JSON.stringify(data.cost, null, 2));
   writeFileSync(path.join(derivedDir, 'gates.json'), JSON.stringify(data.gates, null, 2));
   writeFileSync(path.join(derivedDir, 'scores.json'), JSON.stringify(data.scores, null, 2));
+  writeFileSync(path.join(derivedDir, 'pareto.json'), JSON.stringify(data.pareto ?? {}, null, 2));
 
   // Build HTML report
   const html = `<!DOCTYPE html>
@@ -145,7 +155,9 @@ export function buildReport(
     <p><strong>Architecture:</strong> ${escapeHtml(data.architectureId)}</p>
     <p><strong>Workload:</strong> ${escapeHtml(data.workload)}</p>
     <p><strong>Load:</strong> ${data.loadRps} RPS</p>
-    <p><strong>Generated:</strong> ${new Date().toISOString()}</p>
+    <p><strong>Protocol:</strong> ${escapeHtml(data.protocolVersion ?? 'manual')}</p>
+    <p><strong>Score bounds:</strong> ${escapeHtml(data.scoreBoundsVersion ?? 'unspecified')}</p>
+    <p><strong>Generated:</strong> ${escapeHtml(data.generatedAt ?? new Date().toISOString())}</p>
   </div>
 
   <h2>Metrics</h2>
@@ -162,6 +174,15 @@ export function buildReport(
 
   <h2>Invariant Oracle</h2>
   <pre>${JSON.stringify(data.invariants, null, 2)}</pre>
+
+  <h2>95% Confidence Intervals</h2>
+  <pre>${JSON.stringify(data.confidenceIntervals ?? {}, null, 2)}</pre>
+
+  <h2>Pareto and Regret</h2>
+  <pre>${JSON.stringify(data.pareto ?? {}, null, 2)}</pre>
+
+  <h2>Limitations</h2>
+  <ul>${(data.limitations ?? ['Single-host benchmark results do not generalize to every production environment.']).map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
 </body>
 </html>`;
 

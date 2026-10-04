@@ -11,6 +11,7 @@ services:
       CATALOG_URL: http://catalog-service:3000
       ORDER_URL: http://order-service-1:3000,http://order-service-2:3000
       PAYMENT_URL: http://payment-mock:3000
+      INVENTORY_URL: http://inventory-service:3000
     depends_on:
       user-service: { condition: service_healthy }
       catalog-service: { condition: service_healthy }
@@ -173,12 +174,14 @@ services:
     image: ${BACKEND_IMAGE_DIGEST}
     environment:
       APP_ROLE: payment-mock
+      DATABASE_URL: postgres://bench:bench@postgres:5432/ecommerce
       ARCHITECTURE_ID: ${ARCHITECTURE_ID:-A09}
       RABBITMQ_URL: amqp://rabbitmq
       SUT_PORT: "3000"
       LOG_LEVEL: warn
       NODE_ENV: production
     depends_on:
+      postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "node", "dist/healthcheck.js", "http://localhost:3000/ready"]
@@ -192,12 +195,14 @@ services:
     image: ${BACKEND_IMAGE_DIGEST}
     environment:
       APP_ROLE: notification-mock
+      DATABASE_URL: postgres://bench:bench@postgres:5432/ecommerce
       ARCHITECTURE_ID: ${ARCHITECTURE_ID:-A09}
       RABBITMQ_URL: amqp://rabbitmq
       SUT_PORT: "3000"
       LOG_LEVEL: warn
       NODE_ENV: production
     depends_on:
+      postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "node", "dist/healthcheck.js", "http://localhost:3000/ready"]
@@ -208,7 +213,7 @@ services:
     mem_limit: 128m
 
   postgres:
-    image: postgres:15.3-alpine
+    image: postgres:${POSTGRES_VERSION}
     environment:
       POSTGRES_USER: bench
       POSTGRES_PASSWORD: bench
@@ -216,13 +221,14 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U bench"]
       interval: 5s
-      timeout: 2s
-      retries: 10
+      timeout: 30s
+      retries: 20
+      start_period: 30s
     cpus: "1.0"
     mem_limit: 1536m
 
   redis:
-    image: redis:7.0-alpine
+    image: redis:${REDIS_VERSION}
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -232,7 +238,10 @@ services:
     mem_limit: 128m
 
   rabbitmq:
-    image: rabbitmq:3.12-alpine
+    image: rabbitmq:${RABBITMQ_VERSION}
+    user: "100:101"
+    tmpfs:
+      - /var/lib/rabbitmq:uid=100,gid=101,mode=0770
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s

@@ -17,9 +17,10 @@ export async function bootstrapGateway(_appConfig: AppConfig, logger: Logger): P
   const isMicroservices = archId >= 'A05' && archId <= 'A12';
 
   let targets: string[] = [];
-  const microserviceTargets: { user: string[]; catalog: string[]; order: string[]; payment: string[] } = {
+  const microserviceTargets: { user: string[]; catalog: string[]; inventory: string[]; order: string[]; payment: string[] } = {
     user: [],
     catalog: [],
+    inventory: [],
     order: [],
     payment: [],
   };
@@ -40,6 +41,7 @@ export async function bootstrapGateway(_appConfig: AppConfig, logger: Logger): P
 
     microserviceTargets.user = parseUrls(config.USER_URL, 'http://user-service:3000');
     microserviceTargets.catalog = parseUrls(config.CATALOG_URL, 'http://catalog-service:3000');
+    microserviceTargets.inventory = parseUrls(config.INVENTORY_URL, 'http://inventory-service:3000');
     microserviceTargets.order = parseUrls(config.ORDER_URL, 'http://order-service:3000');
     microserviceTargets.payment = parseUrls(config.PAYMENT_URL, 'http://payment-mock:3000');
     logger.info('Gateway using path-based routing (Microservices)');
@@ -60,6 +62,7 @@ export async function bootstrapGateway(_appConfig: AppConfig, logger: Logger): P
   const currentMicroserviceIndex = {
     user: 0,
     catalog: 0,
+    inventory: 0,
     order: 0,
     payment: 0,
   };
@@ -75,6 +78,9 @@ export async function bootstrapGateway(_appConfig: AppConfig, logger: Logger): P
       } else if (req.originalUrl.startsWith('/products')) {
         targetUrlString = microserviceTargets.catalog[currentMicroserviceIndex.catalog]!;
         currentMicroserviceIndex.catalog = (currentMicroserviceIndex.catalog + 1) % microserviceTargets.catalog.length;
+      } else if (req.originalUrl.startsWith('/inventory')) {
+        targetUrlString = microserviceTargets.inventory[currentMicroserviceIndex.inventory]!;
+        currentMicroserviceIndex.inventory = (currentMicroserviceIndex.inventory + 1) % microserviceTargets.inventory.length;
       } else if (req.originalUrl.startsWith('/orders') || req.originalUrl.startsWith('/users')) {
         // Users contains /users/:id/orders and /users/:id/cart which both go to order-service
         targetUrlString = microserviceTargets.order[currentMicroserviceIndex.order]!;
@@ -88,8 +94,20 @@ export async function bootstrapGateway(_appConfig: AppConfig, logger: Logger): P
         currentMicroserviceIndex.order = (currentMicroserviceIndex.order + 1) % microserviceTargets.order.length;
       }
     } else {
-      targetUrlString = targets[currentTargetIndex]!;
-      currentTargetIndex = (currentTargetIndex + 1) % targets.length;
+      const paymentOrderId = req.originalUrl.startsWith('/payments/') && typeof req.body?.orderId === 'string'
+        ? req.body.orderId as string
+        : undefined;
+      if (paymentOrderId && targets.length > 1) {
+        // The monolith payment mock intentionally keeps its idempotency state
+        // in-process. Route all replays for one order to the same replica so a
+        // scaled A03/A04 deployment preserves the single-payment contract.
+        let hash = 0;
+        for (const character of paymentOrderId) hash = ((hash * 31) + character.charCodeAt(0)) >>> 0;
+        targetUrlString = targets[hash % targets.length]!;
+      } else {
+        targetUrlString = targets[currentTargetIndex]!;
+        currentTargetIndex = (currentTargetIndex + 1) % targets.length;
+      }
     }
 
     const targetUrl = new URL(req.originalUrl, targetUrlString);

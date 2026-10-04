@@ -30,7 +30,7 @@ function main(): void {
   `);
 
   const appliedMigrations = new Set(
-    db.prepare('SELECT filename FROM migrations').all().map((row: any) => row.filename as string)
+    (db.prepare('SELECT filename FROM migrations').all() as Array<{ filename: string }>).map((row) => row.filename)
   );
 
   const files = readdirSync(MIGRATIONS_DIR)

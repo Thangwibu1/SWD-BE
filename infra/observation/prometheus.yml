@@ -4,8 +4,9 @@ global:
 
 scrape_configs:
   - job_name: 'sut-services'
-    static_configs:
-      - targets: []  # Dynamically populated by experiment worker
+    file_sd_configs:
+      - files: ['/etc/prometheus/targets/sut-targets.json']
+        refresh_interval: 2s
     metrics_path: /metrics
     scrape_timeout: 2s
 

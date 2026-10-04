@@ -3,7 +3,14 @@ dist/
 coverage/
 data/
 .env
+infra/deploy/deploy.env
+infra/deploy/secrets/
 results/*
 !results/.gitkeep
+/results-smoke-*/
+/data/smoke-*.db*
+# The deterministic pilot snapshot is part of the reproducible benchmark input.
+# Large ad-hoc/main snapshots should be archived externally and added explicitly.
 database/snapshots/*.dump
+!database/snapshots/pilot-20261001.dump
 *.log

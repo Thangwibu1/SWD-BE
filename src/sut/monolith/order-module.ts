@@ -18,6 +18,7 @@ import {
 import type { OrderStatus, PaymentStatus } from '../shared/domain/order-rules.js';
 import { DomainError } from '../shared/errors/domain-errors.js';
 import type { InventoryTxOps } from './inventory-module.js';
+import type { EventEnvelope } from '../shared/events/rabbitmq.js';
 
 /**
  * Order module — checkout, query, cancel.
@@ -28,15 +29,14 @@ import type { InventoryTxOps } from './inventory-module.js';
  * event-driven (saga with compensation).
  */
 export interface EventPublisher {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  publish(routingKey: string, event: Omit<any, 'eventId' | 'occurredAt' | 'schemaVersion'>): Promise<void>;
+  publish(routingKey: string, event: Omit<EventEnvelope, 'eventId' | 'occurredAt' | 'schemaVersion'>): Promise<void>;
 }
 
 export type NotificationSender = (orderId: string) => void;
 
 export function createOrderModule(
   db: Database,
-  inventoryTx: InventoryTxOps,
+  inventoryTx: InventoryTxOps | undefined,
   payments: PaymentApi,
   sendNotification?: NotificationSender,
   publisher?: EventPublisher,
@@ -46,6 +46,7 @@ export function createOrderModule(
       if (publisher) {
         return checkoutAsync(db, publisher, idempotencyKey, request);
       }
+      if (!inventoryTx) throw new Error('Synchronous checkout requires inventory operations');
       return checkoutInTransaction(db, inventoryTx, payments, idempotencyKey, request, sendNotification);
     },
 
@@ -78,7 +79,8 @@ export function createOrderModule(
     },
 
     async cancel(orderId): Promise<Order> {
-      return cancelOrder(db, inventoryTx, orderId);
+      if (!inventoryTx) throw new Error('Cancellation requires inventory operations');
+      return cancelOrder(db, inventoryTx, orderId, publisher);
     },
   };
 }
@@ -113,9 +115,9 @@ async function checkoutInTransaction(
     );
     if (existing.rows[0]) {
       const row = existing.rows[0];
-      const storedItems: Array<{ productId: string; quantity: number }> = JSON.parse(
+      const storedItems: Array<{ productId: string; quantity: number; unitPrice: string }> = JSON.parse(
         typeof row.items_json === 'string' ? row.items_json : JSON.stringify(row.items_json),
-      ) as Array<{ productId: string; quantity: number }>;
+      ) as Array<{ productId: string; quantity: number; unitPrice: string }>;
       if (!isSameCheckout({ userId: row.user_id, items: storedItems }, request)) {
         throw new DomainError('IDEMPOTENCY_KEY_CONFLICT');
       }
@@ -204,6 +206,7 @@ async function checkoutAsync(
   }
 
   return db.transaction(async (tx) => {
+    await tx.query('order.idempotency.lock', 'SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [idempotencyKey]);
     // Idempotency replay
     const existing = await tx.query<OrderDbRow & { items_json: string }>(
       'order.idempotency',
@@ -218,13 +221,14 @@ async function checkoutAsync(
     );
     if (existing.rows[0]) {
       const row = existing.rows[0];
-      const storedItems: Array<{ productId: string; quantity: number }> = JSON.parse(
+      const storedItems: Array<{ productId: string; quantity: number; unitPrice: string }> = JSON.parse(
         typeof row.items_json === 'string' ? row.items_json : JSON.stringify(row.items_json),
-      ) as Array<{ productId: string; quantity: number }>;
+      ) as Array<{ productId: string; quantity: number; unitPrice: string }>;
       if (!isSameCheckout({ userId: row.user_id, items: storedItems }, request)) {
         throw new DomainError('IDEMPOTENCY_KEY_CONFLICT');
       }
-      return { order: await getOrderFromTx(tx, row.id), outcome: 'accepted' as const, replayed: true };
+      const order = await getOrderFromTx(tx, row.id);
+      return { order, outcome: 'accepted' as const, replayed: true };
     }
 
     // Look up unit prices
@@ -266,20 +270,13 @@ async function checkoutAsync(
 
     const order = await getOrderFromTx(tx, orderId);
 
-    // Publish event
+    // The production publisher writes the outbox using this transaction.
     await publisher.publish('order.created', {
       eventType: 'order.created',
       aggregateId: orderId,
       correlationId: '',
-      payload: {
-        orderId,
-        userId: request.userId,
-        items: itemsWithPrice,
-        totalAmount,
-        paymentMode: request.paymentMode,
-      },
+      payload: { orderId, userId: request.userId, items: itemsWithPrice, totalAmount, idempotencyKey, paymentMode: request.paymentMode },
     });
-
     return { order, outcome: 'accepted' as const, replayed: false };
   });
 }
@@ -290,6 +287,7 @@ async function cancelOrder(
   db: Database,
   inventoryTx: InventoryTxOps,
   orderId: string,
+  publisher?: EventPublisher,
 ): Promise<Order> {
   return db.transaction(async (tx) => {
     const orderRes = await tx.query<OrderDbRow>(
@@ -313,12 +311,19 @@ async function cancelOrder(
 
     await tx.query(
       'order.cancel',
-      `UPDATE orders SET status = 'CANCELLED', payment_status = 'REFUNDED', updated_at = now() WHERE id = $1`,
+      `UPDATE orders SET status = 'CANCELLED', payment_status = 'REFUNDED',
+       inventory_reserved = false, inventory_committed = false, updated_at = now() WHERE id = $1`,
       [orderId],
     );
 
     // Release stock back to available.
     await inventoryTx.releaseStock(tx, items);
+    if (publisher) {
+      await publisher.publish('order.cancelled', {
+        eventType: 'order.cancelled', aggregateId: orderId, correlationId: '',
+        payload: { orderId, reason: 'USER_CANCELLED' },
+      });
+    }
 
     return getOrderFromTx(tx, orderId);
   });

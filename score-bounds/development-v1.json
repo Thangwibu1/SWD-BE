@@ -1,0 +1,12 @@
+{
+  "version": "development-v1",
+  "source": "Development-only bounds; replace with percentile 5/95 bounds generated from pilot evidence before a main campaign.",
+  "bounds": {
+    "p99_ms": { "lower": 10, "upper": 500 },
+    "error_rate": { "lower": 0, "upper": 0.05 },
+    "throughput_rps": { "lower": 10, "upper": 500 },
+    "monthly_cost_usd": { "lower": 50, "upper": 500 },
+    "cpu_efficiency": { "lower": 1, "upper": 100 },
+    "memory_peak_mib": { "lower": 512, "upper": 4096 }
+  }
+}

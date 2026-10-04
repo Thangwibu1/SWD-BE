@@ -5,6 +5,7 @@ import type { ProductCache } from './product-cache.js';
 import type { CartStore } from './cart-module.js';
 import type { CartLine } from '../shared/domain/types.js';
 import type { Logger } from '../shared/../../utils/logger.js';
+import { getSutMetrics } from '../shared/observability/metrics.js';
 
 const DEFAULT_TTL_SECONDS = 60;
 
@@ -26,25 +27,37 @@ export class RedisProductCache implements ProductCache {
   ) {}
 
   async getProduct(id: string): Promise<Product | null> {
+    const started = process.hrtime.bigint();
     const raw = await this.client.get(`product:${id}`);
+    getSutMetrics().cacheDuration.observe(Number(process.hrtime.bigint() - started) / 1e9);
+    getSutMetrics().cacheRequests.inc({ result: raw ? 'hit' : 'miss' });
     return raw ? (JSON.parse(raw) as Product) : null;
   }
 
   async setProduct(id: string, product: Product): Promise<void> {
+    const started = process.hrtime.bigint();
     await this.client.set(`product:${id}`, JSON.stringify(product), { EX: this.ttl });
+    getSutMetrics().cacheDuration.observe(Number(process.hrtime.bigint() - started) / 1e9);
   }
 
   async getPage(key: string): Promise<Page<Product> | null> {
+    const started = process.hrtime.bigint();
     const raw = await this.client.get(`page:${key}`);
+    getSutMetrics().cacheDuration.observe(Number(process.hrtime.bigint() - started) / 1e9);
+    getSutMetrics().cacheRequests.inc({ result: raw ? 'hit' : 'miss' });
     return raw ? (JSON.parse(raw) as Page<Product>) : null;
   }
 
   async setPage(key: string, page: Page<Product>): Promise<void> {
+    const started = process.hrtime.bigint();
     await this.client.set(`page:${key}`, JSON.stringify(page), { EX: this.ttl });
+    getSutMetrics().cacheDuration.observe(Number(process.hrtime.bigint() - started) / 1e9);
   }
 
   async invalidate(id: string): Promise<void> {
+    const started = process.hrtime.bigint();
     await this.client.del(`product:${id}`);
+    getSutMetrics().cacheDuration.observe(Number(process.hrtime.bigint() - started) / 1e9);
   }
 }
 

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "experiment-request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["candidate", "workloadProfile", "loadLevelsRps", "slo", "costCatalogVersion", "repetitions"],
+  "properties": {
+    "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "candidate": { "$ref": "architecture-candidate" },
+    "modelMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modelName": { "type": "string", "maxLength": 120 },
+        "promptId": { "type": "string", "maxLength": 120 },
+        "generationSeed": { "type": "integer" }
+      }
+    },
+    "workloadProfile": { "enum": ["BROWSING_V1", "MIXED_V1", "CHECKOUT_V1", "FLASH_SALE_V1"] },
+    "loadLevelsRps": { "type": "array", "minItems": 1, "maxItems": 10, "uniqueItems": true, "items": { "type": "integer", "minimum": 1, "maximum": 10000 } },
+    "warmupSeconds": { "type": "integer", "minimum": 0, "maximum": 3600 },
+    "measureSeconds": { "type": "integer", "minimum": 1, "maximum": 86400 },
+    "cooldownSeconds": { "type": "integer", "minimum": 0, "maximum": 3600 },
+    "repetitions": { "type": "integer", "minimum": 1, "maximum": 5 },
+    "invalidRetryLimit": { "type": "integer", "minimum": 0, "maximum": 1 },
+    "datasetProfile": { "enum": ["pilot", "main", "capacity"] },
+    "protocolVersion": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "slo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["p99Ms", "errorRateMax"],
+      "properties": {
+        "p99Ms": { "type": "number", "exclusiveMinimum": 0 },
+        "errorRateMax": { "type": "number", "minimum": 0, "maximum": 1 },
+        "consistencyViolationsMax": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "costCatalogVersion": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "scoreBoundsVersion": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
+  }
+}

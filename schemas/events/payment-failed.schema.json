@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architecture-evaluation.local/schemas/events/payment-failed.schema.json",
+  "title": "payment.failed Event Payload",
+  "description": "Emitted when payment processing fails",
+  "type": "object",
+  "required": ["orderId", "userId", "amount", "items", "reason"],
+  "properties": {
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "userId": { "type": "string", "format": "uuid" },
+    "amount": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d{2}$"
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 240
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["productId", "quantity", "unitPrice"],
+        "properties": {
+          "productId": { "type": "string", "format": "uuid" },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "unitPrice": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "errorCode": {
+      "type": "string",
+      "maxLength": 40
+    }
+  },
+  "additionalProperties": false
+}

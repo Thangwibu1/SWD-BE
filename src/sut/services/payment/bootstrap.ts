@@ -6,6 +6,10 @@ import { createPaymentModule } from '../../monolith/payment-module.js';
 import { createBusinessRouter } from '../../shared/router/business-router.js';
 import type { SutApis } from '../../shared/domain/types.js';
 import { RabbitMQClient } from '../../shared/events/rabbitmq.js';
+import { Database } from '../../shared/database/db.js';
+import { createPool } from '../../shared/database/pool.js';
+import { ensureReliabilitySchema } from '../../shared/database/reliability.js';
+import { DomainError } from '../../shared/errors/domain-errors.js';
 
 const EVENT_DRIVEN_ARCHITECTURES = new Set(['A09', 'A10', 'A11', 'A12']);
 
@@ -14,7 +18,10 @@ export async function bootstrapPaymentMock(_appConfig: AppConfig, logger: Logger
   const archId = config.ARCHITECTURE_ID;
   logger.info({ architectureId: archId }, 'Bootstrapping Payment Mock Service');
 
-  const payments = createPaymentModule();
+  const pool = createPool({ connectionString: config.DATABASE_URL, max: config.DB_POOL_MAX, applicationName: `payment-${archId}` });
+  const db = new Database(pool);
+  await ensureReliabilitySchema(db);
+  const payments = createPaymentModule(db);
 
   const apis = {
     payments,
@@ -32,11 +39,11 @@ export async function bootstrapPaymentMock(_appConfig: AppConfig, logger: Logger
   let rabbitmq: RabbitMQClient | undefined;
   if (EVENT_DRIVEN_ARCHITECTURES.has(archId)) {
     const rmqUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
-    rabbitmq = new RabbitMQClient(rmqUrl, logger);
+    rabbitmq = new RabbitMQClient(rmqUrl, logger, db);
     await rabbitmq.connect();
 
     await rabbitmq.subscribe('payment.inventory.reserved', ['inventory.reserved'], async (event) => {
-      const { orderId, amount, paymentMode } = event.payload;
+      const { orderId, userId, amount, paymentMode, items } = event.payload;
       try {
         const paymentResult = await payments.charge({ orderId, amount, mode: paymentMode });
         if (paymentResult.status === 'PAID') {
@@ -48,7 +55,7 @@ export async function bootstrapPaymentMock(_appConfig: AppConfig, logger: Logger
             correlationId: event.correlationId,
             causationId: event.eventId,
             schemaVersion: 1,
-            payload: { orderId },
+            payload: { orderId, userId, amount, items, transactionId: paymentResult.paymentId },
           });
         } else {
           await rabbitmq!.publish('payment.failed', {
@@ -59,10 +66,11 @@ export async function bootstrapPaymentMock(_appConfig: AppConfig, logger: Logger
             correlationId: event.correlationId,
             causationId: event.eventId,
             schemaVersion: 1,
-            payload: { orderId, reason: 'Payment declined' },
+            payload: { orderId, userId, amount, items, reason: 'Payment declined' },
           });
         }
       } catch (err: unknown) {
+        if (!(err instanceof DomainError) || err.code !== 'DEPENDENCY_TIMEOUT') throw err;
         await rabbitmq!.publish('payment.failed', {
           eventId: crypto.randomUUID(),
           eventType: 'payment.failed',
@@ -71,7 +79,7 @@ export async function bootstrapPaymentMock(_appConfig: AppConfig, logger: Logger
           correlationId: event.correlationId,
           causationId: event.eventId,
           schemaVersion: 1,
-          payload: { orderId, reason: err instanceof Error ? err.message : String(err) },
+          payload: { orderId, userId, amount, items, reason: err instanceof Error ? err.message : String(err) },
         });
       }
     });
@@ -84,6 +92,7 @@ export async function bootstrapPaymentMock(_appConfig: AppConfig, logger: Logger
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutting down Payment Mock Service');
     if (rabbitmq) await rabbitmq.close().catch(() => {});
+    await pool.end();
     server.close(() => process.exit(0));
   };
   process.once('SIGINT', () => void shutdown('SIGINT'));

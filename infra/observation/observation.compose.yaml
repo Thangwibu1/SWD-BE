@@ -1,18 +1,22 @@
 services:
   prometheus:
-    image: prom/prometheus:v2.53.0
+    image: prom/prometheus:${PROMETHEUS_VERSION}
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./sut-targets.json:/etc/prometheus/targets/sut-targets.json:ro
     ports:
       - "9090:9090"
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=1d'
       - '--storage.tsdb.retention.size=512MB'
+      - '--web.enable-lifecycle'
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    image: gcr.io/cadvisor/cadvisor:${CADVISOR_VERSION}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /sys:/sys:ro

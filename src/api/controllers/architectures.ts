@@ -15,6 +15,7 @@ export function listArchitecturesController(_req: Request, res: Response): void 
       communication: profile.communication,
       resourceProfile: profile.resourceProfile,
       allowedRoles: profile.allowedRoles,
+      resources: profile.resources,
     }));
     res.json({ architectures });
   } catch (err: unknown) {
@@ -40,6 +41,7 @@ export function getArchitectureController(req: Request, res: Response): void {
       communication: profile.communication,
       resourceProfile: profile.resourceProfile,
       allowedRoles: profile.allowedRoles,
+      resources: profile.resources,
     });
   } catch (err: unknown) {
     res.status(500).json({ code: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : 'Unknown error' });
@@ -69,6 +71,12 @@ export function listCostCatalogsController(_req: Request, res: Response): void {
       return {
         version: data.version,
         currency: data.currency,
+        hoursPerMonth: data.hoursPerMonth,
+        rates: data.rates,
+        engineering: data.engineering,
+        effectiveDate: data.effectiveDate,
+        region: data.region,
+        source: data.source,
         filename: f,
       };
     });

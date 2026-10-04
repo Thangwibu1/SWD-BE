@@ -13,6 +13,8 @@ import { loadDataset } from '../../src/sut/shared/database/seed/loader.js';
 import { createSnapshot } from '../../src/sut/shared/database/snapshot.js';
 import { startTestPostgres } from './helpers/dev-postgres.js';
 import type { TestPostgres } from './helpers/dev-postgres.js';
+import { Database } from '../../src/sut/shared/database/db.js';
+import { ensureReliabilitySchema } from '../../src/sut/shared/database/reliability.js';
 
 const profile: DatasetProfile = {
   name: 'pilot',
@@ -98,6 +100,9 @@ describe('SUT dataset seed / snapshot / reset (PostgreSQL)', () => {
       database: 'ecommerce',
     };
     await createSnapshot(target, { profile: 'pilot', seed: SEED, checksum: expected }, snapshotDir);
+    await ensureReliabilitySchema(new Database(pool));
+    await pool.query("INSERT INTO reliability.inbox(consumer,event_id) VALUES ('reset-test',gen_random_uuid())");
+    await pool.query("INSERT INTO reliability.inventory_operations(order_id,items,state) VALUES (gen_random_uuid(),'[]','RELEASED')");
     await pool.query('UPDATE inventory SET available_quantity = 0');
     await pool.query(`DELETE FROM orders WHERE id = $1`, [dataset.orders[0]!.id]);
     const dirty = await pool.connect();
@@ -114,5 +119,7 @@ describe('SUT dataset seed / snapshot / reset (PostgreSQL)', () => {
       snapshotDir,
     });
     expect(result.combined).toBe(expected.combined);
+    expect((await pool.query('SELECT count(*)::int AS count FROM reliability.inbox')).rows[0].count).toBe(0);
+    expect((await pool.query('SELECT count(*)::int AS count FROM reliability.inventory_operations')).rows[0].count).toBe(0);
   });
 });

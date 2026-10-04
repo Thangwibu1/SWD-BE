@@ -1,14 +1,19 @@
 // k6 workload: FLASH_SALE_V1
 // Checkout 80% on 20 hot SKUs, order read 20%
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { check } from 'k6';
 import { Rate, Trend } from 'k6/metrics';
+import { recordResponse } from './error-metrics.js';
+import { observeCheckout } from './checkout-observation.js';
 
-const errorRate = new Rate('business_errors');
 const checkoutAcceptLatency = new Trend('checkout_accept_latency', true);
+const checkoutSuccessRate = new Rate('checkout_acceptance_rate');
+const stockoutRate = new Rate('stockout_rate');
 const BASE_URL = __ENV.SUT_BASE_URL || 'http://localhost:3000';
 
 export const options = {
+  discardResponseBodies: true,
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
   scenarios: {
     flash_sale: {
       executor: 'constant-arrival-rate',
@@ -26,6 +31,7 @@ export const options = {
 const PRODUCT_IDS = JSON.parse(__ENV.PRODUCT_IDS || '[]');
 const HOT_SKUS = PRODUCT_IDS.slice(0, 20);
 const USER_IDS = JSON.parse(__ENV.USER_IDS || '[]');
+const E2E_POLL_SAMPLE_RATE = parseFloat(__ENV.E2E_POLL_SAMPLE_RATE || '0.01');
 
 function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function headers() {
@@ -40,17 +46,20 @@ function flashCheckout() {
     userId: pickRandom(USER_IDS),
     items: [{ productId: pickRandom(HOT_SKUS), quantity: 1 }],
     paymentMode: 'MOCK_SUCCESS',
-  }), { headers: { ...headers(), 'Idempotency-Key': idempotencyKey }, tags: { operation: 'checkout_accept' } });
+  }), { headers: { ...headers(), 'Idempotency-Key': idempotencyKey }, tags: { operation: 'checkout_accept' }, responseType: 'text' });
   checkoutAcceptLatency.add(Date.now() - start);
   check(res, { 'checkout ok': (r) => r.status === 201 || r.status === 202 || r.status === 409 });
-  if (res.status >= 500) errorRate.add(1); else errorRate.add(0);
+  recordResponse(res, [409, 422]);
+  checkoutSuccessRate.add(res.status === 201 || res.status === 202);
+  stockoutRate.add(res.status === 409);
+  observeCheckout(res, BASE_URL, start, headers(), E2E_POLL_SAMPLE_RATE);
 }
 
 function readOrders() {
   if (!USER_IDS.length) return;
   const res = http.get(`${BASE_URL}/users/${pickRandom(USER_IDS)}/orders`, { headers: headers(), tags: { operation: 'order_read' } });
   check(res, { 'order read ok': (r) => r.status < 500 });
-  if (res.status >= 500) errorRate.add(1); else errorRate.add(0);
+  recordResponse(res);
 }
 
 export default function () {

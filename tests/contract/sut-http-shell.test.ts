@@ -64,4 +64,12 @@ describe('SUT HTTP shell', () => {
       .expect(413);
     expect(big.body.code).toBe('PAYLOAD_TOO_LARGE');
   });
+
+  it('exposes the low-cardinality application metrics contract', async () => {
+    await request(app).get('/ctx').expect(200);
+    const res = await request(app).get('/metrics').expect(200);
+    expect(res.text).toContain('http_server_requests_total{service="sut",route="/ctx",method="GET",status="200"}');
+    expect(res.text).toContain('http_server_request_duration_seconds_bucket{le="0.075",service="sut",route="/ctx",method="GET"}');
+    expect(res.text).toContain('http_server_request_duration_seconds_bucket{le="2.5",service="sut",route="/ctx",method="GET"}');
+  });
 });

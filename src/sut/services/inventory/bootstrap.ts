@@ -5,7 +5,8 @@ import { createSutApp, finalizeSutApp } from '../../shared/http/sut-http.js';
 import { Database } from '../../shared/database/db.js';
 import { createPool } from '../../shared/database/pool.js';
 import { DomainError } from '../../shared/errors/domain-errors.js';
-import type { Request, Response } from 'express';
+import { applyInventoryOperation } from './operations.js';
+import { ensureReliabilitySchema } from '../../shared/database/reliability.js';
 import { createInventoryModule } from '../../monolith/inventory-module.js';
 import { RabbitMQClient } from '../../shared/events/rabbitmq.js';
 
@@ -22,6 +23,7 @@ export async function bootstrapInventoryService(_appConfig: AppConfig, logger: L
     applicationName: `inventory-service-${archId}`,
   });
   const db = new Database(pool);
+  await ensureReliabilitySchema(db);
   
   // Reuse the monolith's inventory module to get the DB operations
   const inventoryModule = createInventoryModule(db);
@@ -31,62 +33,42 @@ export async function bootstrapInventoryService(_appConfig: AppConfig, logger: L
   app.get('/health', (_req, res) => res.json({ status: 'ok', service: `inventory-service-${archId}` }));
   app.get('/ready', (_req, res) => res.json({ status: 'ready', checks: [] }));
 
-  // Internal APIs for REST orchestration
-  app.post('/internal/reserve', async (req: Request, res: Response) => {
-    try {
-      const items = req.body.items as Array<{ productId: string; quantity: number }>;
-      await db.transaction(async (tx) => {
-        await inventoryModule.reserveStock(tx, items);
-      });
-      res.json({ status: 'reserved' });
-    } catch (error) {
-      if (error instanceof DomainError) {
-        res.status(400).json({ code: error.code, message: error.message, details: error.details });
-      } else {
-        res.status(500).json({ code: 'INTERNAL_ERROR', message: String(error) });
-      }
-    }
-  });
-
-  app.post('/internal/release', async (req: Request, res: Response) => {
-    try {
-      const items = req.body.items as Array<{ productId: string; quantity: number }>;
-      await db.transaction(async (tx) => {
-        await inventoryModule.releaseStock(tx, items);
-      });
-      res.json({ status: 'released' });
-    } catch (error) {
-      res.status(500).json({ code: 'INTERNAL_ERROR', message: String(error) });
-    }
-  });
-
-  app.post('/internal/commit', async (req: Request, res: Response) => {
-    try {
-      const items = req.body.items as Array<{ productId: string; quantity: number }>;
-      await db.transaction(async (tx) => {
-        await inventoryModule.commitStock(tx, items);
-      });
-      res.json({ status: 'committed' });
-    } catch (error) {
-      res.status(500).json({ code: 'INTERNAL_ERROR', message: String(error) });
-    }
-  });
+  // Mutations are keyed by order ID, with durable inventory operation state.
+  for (const action of ['reserve', 'release', 'commit'] as const) {
+    app.post(`/internal/${action}`, async (req, res) => {
+      await applyInventoryOperation(db, action, req.body.orderId, req.body.items);
+      res.json({ status: action });
+    });
+  }
 
   finalizeSutApp(app, logger);
 
   let rabbitmq: RabbitMQClient | undefined;
   if (EVENT_DRIVEN_ARCHITECTURES.has(archId)) {
     const rmqUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
-    rabbitmq = new RabbitMQClient(rmqUrl, logger);
+    rabbitmq = new RabbitMQClient(rmqUrl, logger, db);
     await rabbitmq.connect();
 
     // order.created -> reserveStock
     await rabbitmq.subscribe('inventory.order.created', ['order.created'], async (event) => {
-      const { orderId, items, paymentMode, totalAmount } = event.payload;
+      const { orderId, userId, items, paymentMode, totalAmount } = event.payload;
       try {
-        await db.transaction(async (tx) => {
-          await inventoryModule.reserveStock(tx, items);
+        const pending = await db.transaction(async (tx) => {
+          const order = await tx.query<{ status: string; inventory_reserved: boolean; inventory_committed: boolean }>(
+            'order.lock_inventory_saga',
+            'SELECT status, inventory_reserved, inventory_committed FROM orders WHERE id = $1 FOR UPDATE', [orderId],
+          );
+          const current = order.rows[0];
+          if (!current) throw new Error(`Order ${String(orderId)} not found`);
+          if (current.status !== 'PENDING') return false;
+          if (!current.inventory_reserved && !current.inventory_committed) {
+            await inventoryModule.reserveStock(tx, items);
+            await tx.query('order.mark_inventory_reserved',
+              'UPDATE orders SET inventory_reserved = true, updated_at = now() WHERE id = $1', [orderId]);
+          }
+          return true;
         });
+        if (!pending) return;
         await rabbitmq!.publish('inventory.reserved', {
           eventId: crypto.randomUUID(),
           eventType: 'inventory.reserved',
@@ -95,9 +77,10 @@ export async function bootstrapInventoryService(_appConfig: AppConfig, logger: L
           correlationId: event.correlationId,
           causationId: event.eventId,
           schemaVersion: 1,
-          payload: { orderId, items, paymentMode, amount: totalAmount },
+          payload: { orderId, userId, items, paymentMode, amount: totalAmount },
         });
       } catch (err: unknown) {
+        if (!(err instanceof DomainError) || !['INSUFFICIENT_STOCK', 'PRODUCT_NOT_FOUND'].includes(err.code)) throw err;
         await rabbitmq!.publish('inventory.rejected', {
           eventId: crypto.randomUUID(),
           eventType: 'inventory.rejected',
@@ -112,11 +95,14 @@ export async function bootstrapInventoryService(_appConfig: AppConfig, logger: L
     });
 
     // payment.failed -> releaseStock
-    await rabbitmq.subscribe('inventory.payment.failed', ['payment.failed', 'order.cancelled'], async (event) => {
+    await rabbitmq.subscribe('inventory.payment.failed', ['payment.failed'], async (event) => {
       const { orderId, items } = event.payload;
       if (items) {
         await db.transaction(async (tx) => {
-          await inventoryModule.releaseStock(tx, items);
+          const claimed = await tx.query('order.claim_inventory_release',
+            `UPDATE orders SET inventory_reserved = false, updated_at = now()
+             WHERE id = $1 AND inventory_reserved = true AND inventory_committed = false RETURNING id`, [orderId]);
+          if ((claimed.rowCount ?? 0) > 0) await inventoryModule.releaseStock(tx, items);
         });
         await rabbitmq!.publish('inventory.released', {
           eventId: crypto.randomUUID(),
@@ -126,17 +112,22 @@ export async function bootstrapInventoryService(_appConfig: AppConfig, logger: L
           correlationId: event.correlationId,
           causationId: event.eventId,
           schemaVersion: 1,
-          payload: { orderId },
+          payload: { orderId, releases: items.map((item: { productId: string; quantity: number }) => ({
+            productId: item.productId, quantity: item.quantity,
+          })), reason: 'PAYMENT_FAILED' },
         });
       }
     });
 
     // order.confirmed -> commitStock
     await rabbitmq.subscribe('inventory.order.confirmed', ['order.confirmed'], async (event) => {
-      const { items } = event.payload;
+      const { orderId, items } = event.payload;
       if (items) {
         await db.transaction(async (tx) => {
-          await inventoryModule.commitStock(tx, items);
+          const claimed = await tx.query('order.claim_inventory_commit',
+            `UPDATE orders SET inventory_reserved = false, inventory_committed = true, updated_at = now()
+             WHERE id = $1 AND status = 'CONFIRMED' AND inventory_reserved = true AND inventory_committed = false RETURNING id`, [orderId]);
+          if ((claimed.rowCount ?? 0) > 0) await inventoryModule.commitStock(tx, items);
         });
       }
     });

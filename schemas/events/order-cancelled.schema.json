@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architecture-evaluation.local/schemas/events/order-cancelled.schema.json",
+  "title": "order.cancelled Event Payload",
+  "description": "Emitted when order is cancelled (failed payment or explicit user cancellation)",
+  "type": "object",
+  "required": ["orderId", "reason"],
+  "properties": {
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reason": {
+      "type": "string",
+      "enum": ["PAYMENT_FAILED", "INVENTORY_REJECTED", "USER_CANCELLED"]
+    },
+    "cancelledAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

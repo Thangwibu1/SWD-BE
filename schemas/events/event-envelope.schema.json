@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architecture-evaluation.local/schemas/events/event-envelope.schema.json",
+  "title": "Event Envelope",
+  "description": "Standard envelope for all domain events in event-driven architecture",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "occurredAt",
+    "aggregateId",
+    "correlationId",
+    "schemaVersion",
+    "payload"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this event instance"
+    },
+    "eventType": {
+      "type": "string",
+      "enum": [
+        "order.created",
+        "inventory.reserved",
+        "inventory.rejected",
+        "payment.completed",
+        "payment.failed",
+        "inventory.released",
+        "order.confirmed",
+        "order.cancelled"
+      ],
+      "description": "Event type discriminator"
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp when event occurred"
+    },
+    "aggregateId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID of the aggregate root (typically order ID)"
+    },
+    "correlationId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Original request ID that triggered this event chain"
+    },
+    "causationId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID of the previous event that caused this one (optional for first event)"
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Event payload schema version"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Event-specific payload, validated against event type schema"
+    }
+  },
+  "additionalProperties": false
+}

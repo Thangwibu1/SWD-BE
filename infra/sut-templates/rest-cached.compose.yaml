@@ -12,6 +12,7 @@ services:
       CATALOG_URL: http://catalog-service:3000
       ORDER_URL: http://order-service:3000
       PAYMENT_URL: http://payment-mock:3000
+      INVENTORY_URL: http://inventory-service:3000
     depends_on:
       user-service: { condition: service_healthy }
       catalog-service: { condition: service_healthy }
@@ -114,10 +115,13 @@ services:
     image: ${BACKEND_IMAGE_DIGEST}
     environment:
       APP_ROLE: payment-mock
+      DATABASE_URL: postgres://bench:bench@postgres:5432/ecommerce
       ARCHITECTURE_ID: A06
       SUT_PORT: "3000"
       LOG_LEVEL: warn
       NODE_ENV: production
+    depends_on:
+      postgres: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "node", "dist/healthcheck.js", "http://localhost:3000/ready"]
       interval: 5s

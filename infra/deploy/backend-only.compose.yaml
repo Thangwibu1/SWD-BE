@@ -1,0 +1,7 @@
+# Development override for running the evaluator without the frontend.
+# The base deployment intentionally keeps the API private; this override
+# publishes it only on loopback for curl/Postman/local automation.
+services:
+  backend:
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-4000}:4000"

@@ -1,0 +1,97 @@
+name: architecture-evaluation
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-architecture-evaluation-backend:0.1.0}
+    environment: &backend-environment
+      NODE_ENV: production
+      APP_ROLE: controller-api
+      API_HOST: 0.0.0.0
+      API_PORT: 4000
+      CORS_ORIGINS: ${PUBLIC_ORIGIN:-http://localhost:8088}
+      EVALUATOR_DB_PATH: /app/data/evaluator.db
+      RESULTS_ROOT: /app/results
+      PROMETHEUS_URL: http://prometheus:9090
+      SUT_HOST: host.docker.internal
+      SUT_BIND_HOST: 0.0.0.0
+      PROMETHEUS_SUT_HOST: host.docker.internal
+    volumes:
+      - evaluator-data:/app/data
+      - evaluator-results:/app/results
+    expose: ["4000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/v1/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  worker:
+    image: ${BACKEND_IMAGE:-architecture-evaluation-backend:0.1.0}
+    user: "0:0"
+    environment:
+      <<: *backend-environment
+      APP_ROLE: experiment-worker
+      LOAD_RUNNER_MODE: local
+      SUT_CONTROL_NETWORK: architecture-evaluation-control
+      # This exact immutable image is used for every SUT role created by the worker.
+      BACKEND_IMAGE_DIGEST: ${SUT_IMAGE:-architecture-evaluation-backend:0.1.0}
+    volumes:
+      - evaluator-data:/app/data
+      - evaluator-results:/app/results
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../observation/sut-targets.json:/app/infra/observation/sut-targets.json
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      backend: { condition: service_healthy }
+      prometheus: { condition: service_healthy }
+    networks: [default, evaluator-control]
+    restart: unless-stopped
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-architecture-evaluation-frontend:0.1.0}
+    environment:
+      BACKEND_UPSTREAM: backend:4000
+    ports: ["${PUBLIC_PORT:-8088}:8080"]
+    depends_on:
+      backend: { condition: service_healthy }
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=1d", "--storage.tsdb.retention.size=512MB"]
+    volumes:
+      - ../observation/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../observation/sut-targets.json:/etc/prometheus/targets/sut-targets.json:ro
+      - prometheus-data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [default, evaluator-control]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    restart: unless-stopped
+
+volumes:
+  evaluator-data:
+  evaluator-results:
+  prometheus-data:
+
+networks:
+  evaluator-control:
+    name: architecture-evaluation-control
+    internal: true

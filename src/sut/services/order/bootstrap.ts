@@ -5,10 +5,14 @@ import { createSutApp, finalizeSutApp } from '../../shared/http/sut-http.js';
 import { Database } from '../../shared/database/db.js';
 import { createPool } from '../../shared/database/pool.js';
 import { createOrderModule } from '../../monolith/order-module.js';
+import { createInventoryModule } from '../../monolith/inventory-module.js';
 import { createBusinessRouter } from '../../shared/router/business-router.js';
 import type { SutApis, PaymentApi, PaymentRequest, PaymentResult } from '../../shared/domain/types.js';
-import type { InventoryTxOps } from '../../monolith/inventory-module.js';
-import { DomainError } from '../../shared/errors/domain-errors.js';
+import { createRestSaga, startSagaRecovery } from './rest-saga.js';
+import { ensureReliabilitySchema } from '../../shared/database/reliability.js';
+import type { RestSagaDependencies } from './rest-saga.js';
+import { DomainError, DOMAIN_ERRORS } from '../../shared/errors/domain-errors.js';
+import type { DomainErrorCode } from '../../shared/errors/domain-errors.js';
 import { connectRedis, RedisCartStore } from '../../monolith/redis-cache.js';
 import { MemoryCartStore } from '../../monolith/cart-module.js';
 import type { CartStore } from '../../monolith/cart-module.js';
@@ -32,58 +36,51 @@ export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logge
     applicationName: `order-service-${archId}`,
   });
   const db = new Database(pool);
+  await ensureReliabilitySchema(db);
   
   const INVENTORY_URL = config.INVENTORY_URL || 'http://inventory-service:3000';
   const PAYMENT_URL = config.PAYMENT_URL || 'http://payment-mock:3000';
 
-  // Implement InventoryTxOps via HTTP to inventory-service
-  const inventoryTx: InventoryTxOps = {
-    async reserveStock(_tx, items) {
-      const res = await fetch(`${INVENTORY_URL}/internal/reserve`, {
+  const inventory: RestSagaDependencies['inventory'] = async (action, orderId, items) => {
+    let res: Response;
+    try {
+      res = await fetch(`${INVENTORY_URL}/internal/${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Request-Id': currentRequestId() || '' },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ orderId, items }),
         signal: AbortSignal.timeout(3000),
       });
-      if (!res.ok) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const err = (await res.json().catch(() => ({}))) as any;
-        throw new DomainError(err.code || 'DEPENDENCY_UNAVAILABLE', err.details);
-      }
-    },
-    async releaseStock(_tx, items) {
-      const res = await fetch(`${INVENTORY_URL}/internal/release`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Request-Id': currentRequestId() || '' },
-        body: JSON.stringify({ items }),
-        signal: AbortSignal.timeout(3000),
-      });
-      if (!res.ok) throw new DomainError('DEPENDENCY_UNAVAILABLE');
-    },
-    async commitStock(_tx, items) {
-      const res = await fetch(`${INVENTORY_URL}/internal/commit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Request-Id': currentRequestId() || '' },
-        body: JSON.stringify({ items }),
-        signal: AbortSignal.timeout(3000),
-      });
-      if (!res.ok) throw new DomainError('DEPENDENCY_UNAVAILABLE');
-    },
+    } catch {
+      throw new DomainError('DEPENDENCY_UNAVAILABLE');
+    }
+    if (!res.ok) {
+      const error = await res.json() as { code: string; details?: unknown };
+      if (res.status >= 500) throw new DomainError('DEPENDENCY_UNAVAILABLE');
+      if (error.code in DOMAIN_ERRORS) throw new DomainError(error.code as DomainErrorCode, error.details);
+      throw new DomainError('DEPENDENCY_UNAVAILABLE');
+    }
   };
 
   // Implement PaymentApi via HTTP to payment-mock
   const payments: PaymentApi = {
     async charge(request: PaymentRequest): Promise<PaymentResult> {
-      const res = await fetch(`${PAYMENT_URL}/payments/mock`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Request-Id': currentRequestId() || '' },
-        body: JSON.stringify(request),
-        signal: AbortSignal.timeout(3000),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${PAYMENT_URL}/payments/mock`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': currentRequestId() || '' },
+          body: JSON.stringify(request),
+          signal: AbortSignal.timeout(8000),
+        });
+      } catch {
+        // An ambiguous transport timeout must not be interpreted as a decline.
+        throw new DomainError('DEPENDENCY_UNAVAILABLE');
+      }
       if (!res.ok) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const err = (await res.json().catch(() => ({}))) as any;
-        throw new DomainError(err.code || 'DEPENDENCY_UNAVAILABLE', err.details);
+        const error = await res.json().catch(() => ({})) as { code?: string; details?: unknown };
+        const code = error.code && Object.hasOwn(DOMAIN_ERRORS, error.code)
+          ? error.code as DomainErrorCode : 'DEPENDENCY_UNAVAILABLE';
+        throw new DomainError(code, error.details);
       }
       return res.json() as Promise<PaymentResult>;
     },
@@ -99,7 +96,7 @@ export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logge
   let rabbitmq: RabbitMQClient | undefined;
   if (EVENT_DRIVEN_ARCHITECTURES.has(archId)) {
     const rmqUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
-    rabbitmq = new RabbitMQClient(rmqUrl, logger);
+    rabbitmq = new RabbitMQClient(rmqUrl, logger, db);
     await rabbitmq.connect();
   }
 
@@ -118,7 +115,9 @@ export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logge
   }
 
   const cart = createCartModule(cartStore);
-  const orders = createOrderModule(db, inventoryTx, payments, undefined, publisher);
+  const saga = publisher ? undefined : createRestSaga(db, { inventory, payments });
+  const stopRecovery = saga ? startSagaRecovery(saga, logger) : undefined;
+  const orders = saga ?? createOrderModule(db, createInventoryModule(db), payments, undefined, publisher);
 
   const apis = {
     cart,
@@ -140,7 +139,9 @@ export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logge
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutting down Order Service');
+    await stopRecovery?.();
     if (rabbitmq) await rabbitmq.close().catch(() => {});
+    await pool.end();
     server.close(() => process.exit(0));
   };
   process.once('SIGINT', () => void shutdown('SIGINT'));

@@ -1,16 +1,20 @@
 // k6 workload: MIXED_V1
 // Browse 60%, cart 20%, checkout 15%, order read 5%
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { check } from 'k6';
 import { Rate, Trend } from 'k6/metrics';
+import { recordResponse } from './error-metrics.js';
+import { observeCheckout } from './checkout-observation.js';
 
-const errorRate = new Rate('business_errors');
 const checkoutAcceptLatency = new Trend('checkout_accept_latency', true);
-const checkoutE2eLatency = new Trend('checkout_e2e_latency', true);
+const checkoutSuccessRate = new Rate('checkout_acceptance_rate');
+const stockoutRate = new Rate('stockout_rate');
 
 const BASE_URL = __ENV.SUT_BASE_URL || 'http://localhost:3000';
 
 export const options = {
+  discardResponseBodies: true,
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
   scenarios: {
     mixed: {
       executor: 'constant-arrival-rate',
@@ -23,7 +27,7 @@ export const options = {
   },
   thresholds: {
     http_req_duration: ['p(99)<500'],
-    business_errors: ['rate<0.05'],
+    business_error_rate: ['rate<0.05'],
   },
   tags: {
     workload: 'MIXED_V1',
@@ -32,6 +36,7 @@ export const options = {
 
 const PRODUCT_IDS = JSON.parse(__ENV.PRODUCT_IDS || '[]');
 const USER_IDS = JSON.parse(__ENV.USER_IDS || '[]');
+const E2E_POLL_SAMPLE_RATE = parseFloat(__ENV.E2E_POLL_SAMPLE_RATE || '1');
 
 function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -52,7 +57,7 @@ function browseProducts() {
     tags: { operation: 'product_list' },
   });
   check(res, { 'product list 200': (r) => r.status === 200 });
-  if (res.status >= 500) errorRate.add(1); else errorRate.add(0);
+  recordResponse(res);
 }
 
 function viewProduct() {
@@ -63,7 +68,7 @@ function viewProduct() {
     tags: { operation: 'product_detail' },
   });
   check(res, { 'product detail 200': (r) => r.status === 200 });
-  if (res.status >= 500) errorRate.add(1); else errorRate.add(0);
+  recordResponse(res);
 }
 
 function searchProducts() {
@@ -74,22 +79,23 @@ function searchProducts() {
     tags: { operation: 'search' },
   });
   check(res, { 'search 200': (r) => r.status === 200 });
-  if (res.status >= 500) errorRate.add(1); else errorRate.add(0);
+  recordResponse(res);
 }
 
 // Cart operations (20%)
 function addToCart() {
   if (PRODUCT_IDS.length === 0) return browseProducts();
   const pid = pickRandom(PRODUCT_IDS);
+  const userId = pickRandom(USER_IDS);
   const res = http.post(`${BASE_URL}/cart/items`, JSON.stringify({
     productId: pid,
     quantity: Math.floor(Math.random() * 3) + 1,
   }), {
-    headers: headers(),
+    headers: { ...headers(), 'X-User-Id': userId },
     tags: { operation: 'cart_write' },
   });
   check(res, { 'cart add ok': (r) => r.status < 500 });
-  if (res.status >= 500) errorRate.add(1); else errorRate.add(0);
+  recordResponse(res);
 }
 
 // Checkout operations (15%)
@@ -107,42 +113,18 @@ function checkout() {
   }), {
     headers: { ...headers(), 'Idempotency-Key': idempotencyKey },
     tags: { operation: 'checkout_accept' },
+    responseType: 'text',
   });
 
   const acceptMs = Date.now() - start;
   checkoutAcceptLatency.add(acceptMs);
 
   check(res, { 'checkout accepted': (r) => r.status === 201 || r.status === 202 });
-  if (res.status >= 500) errorRate.add(1); else errorRate.add(0);
+  recordResponse(res, [409, 422]);
+  checkoutSuccessRate.add(res.status === 201 || res.status === 202);
+  stockoutRate.add(res.status === 409);
 
-  // For event-driven: poll order status for e2e latency
-  if (res.status === 202) {
-    try {
-      const body = JSON.parse(res.body);
-      const orderId = body.orderId || body.id;
-      if (orderId) {
-        let settled = false;
-        for (let i = 0; i < 10 && !settled; i++) {
-          sleep(0.5);
-          const poll = http.get(`${BASE_URL}/orders/${orderId}`, {
-            headers: headers(),
-            tags: { operation: 'checkout_e2e' },
-          });
-          if (poll.status === 200) {
-            try {
-              const order = JSON.parse(poll.body);
-              if (order.status === 'CONFIRMED' || order.status === 'FAILED') {
-                settled = true;
-                checkoutE2eLatency.add(Date.now() - start);
-              }
-            } catch (_) { /* ignore parse errors */ }
-          }
-        }
-      }
-    } catch (_) { /* ignore */ }
-  } else {
-    checkoutE2eLatency.add(acceptMs);
-  }
+  observeCheckout(res, BASE_URL, start, headers(), E2E_POLL_SAMPLE_RATE);
 }
 
 // Order read operations (5%)
@@ -154,7 +136,7 @@ function readOrders() {
     tags: { operation: 'order_read' },
   });
   check(res, { 'order read ok': (r) => r.status < 500 });
-  if (res.status >= 500) errorRate.add(1); else errorRate.add(0);
+  recordResponse(res);
 }
 
 export default function () {

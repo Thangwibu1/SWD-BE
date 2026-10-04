@@ -1,0 +1,18 @@
+version: main-v1
+seed: 20261001
+datasetProfile: main
+architectures: [A01, A02, A03, A04, A05, A06, A07, A08, A09, A10, A11, A12]
+workloads: [BROWSING_V1, MIXED_V1, CHECKOUT_V1, FLASH_SALE_V1]
+loadLevelsRps: [25, 50, 100, 200, 300]
+repetitions: 5
+warmupSeconds: 120
+measureSeconds: 600
+cooldownSeconds: 60
+costCatalogVersion: research-v1
+scoreBoundsVersion: development-v1
+slo: { p99Ms: 100, errorRateMax: 0.01, consistencyViolationsMax: 0 }
+randomization: seeded-block
+invalidRetryLimit: 1
+limitations:
+  - Load levels must be frozen again from pilot results before the publication run.
+  - Replace research-v1 with a dated regional cost catalog before drawing cost conclusions.
