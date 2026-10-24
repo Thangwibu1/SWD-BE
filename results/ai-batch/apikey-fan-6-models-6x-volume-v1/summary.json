@@ -1,0 +1,141 @@
+{
+  "studyId": "apikey-fan-6-models-6x-volume-v1",
+  "fingerprint": "c1fefd467f0e6602c0284c376027415d0abdd5d965a7dac059ce3ffe26618852",
+  "mode": "collect",
+  "plannedGenerations": 36,
+  "recordedGenerations": 36,
+  "maximumBenchmarkRuns": 324,
+  "nominalBenchmarkHours": 58.05,
+  "collectedRuns": 153,
+  "groups": [
+    {
+      "modelId": "claude",
+      "scenarioId": "ecommerce-volume",
+      "expected": "supported",
+      "planned": 6,
+      "measured": 6,
+      "apiErrors": 5,
+      "responseCount": 1,
+      "correctCount": 1,
+      "statusCounts": {
+        "VALID": 1,
+        "API_ERROR": 5
+      },
+      "responseAccuracy": 1,
+      "endToEndSuccessRate": 0.16666666666666666,
+      "selectionCounts": {
+        "A03": 1
+      },
+      "selectionStability": null
+    },
+    {
+      "modelId": "codex",
+      "scenarioId": "ecommerce-volume",
+      "expected": "supported",
+      "planned": 6,
+      "measured": 6,
+      "apiErrors": 0,
+      "responseCount": 6,
+      "correctCount": 6,
+      "statusCounts": {
+        "VALID": 6
+      },
+      "responseAccuracy": 1,
+      "endToEndSuccessRate": 1,
+      "selectionCounts": {
+        "A43": 4,
+        "A52": 1,
+        "A48": 1
+      },
+      "selectionStability": 0.6666666666666666
+    },
+    {
+      "modelId": "deepseek",
+      "scenarioId": "ecommerce-volume",
+      "expected": "supported",
+      "planned": 6,
+      "measured": 6,
+      "apiErrors": 6,
+      "responseCount": 0,
+      "correctCount": 0,
+      "statusCounts": {
+        "API_ERROR": 6
+      },
+      "responseAccuracy": null,
+      "endToEndSuccessRate": 0,
+      "selectionCounts": {},
+      "selectionStability": null
+    },
+    {
+      "modelId": "kimi",
+      "scenarioId": "ecommerce-volume",
+      "expected": "supported",
+      "planned": 6,
+      "measured": 6,
+      "apiErrors": 0,
+      "responseCount": 6,
+      "correctCount": 5,
+      "statusCounts": {
+        "INVALID_SCHEMA": 1,
+        "VALID": 5
+      },
+      "responseAccuracy": 0.8333333333333334,
+      "endToEndSuccessRate": 0.8333333333333334,
+      "selectionCounts": {
+        "A20": 4,
+        "A03": 1
+      },
+      "selectionStability": 0.8
+    },
+    {
+      "modelId": "jev",
+      "scenarioId": "ecommerce-volume",
+      "expected": "supported",
+      "planned": 6,
+      "measured": 6,
+      "apiErrors": 6,
+      "responseCount": 0,
+      "correctCount": 0,
+      "statusCounts": {
+        "API_ERROR": 6
+      },
+      "responseAccuracy": null,
+      "endToEndSuccessRate": 0,
+      "selectionCounts": {},
+      "selectionStability": null
+    },
+    {
+      "modelId": "glm",
+      "scenarioId": "ecommerce-volume",
+      "expected": "supported",
+      "planned": 6,
+      "measured": 6,
+      "apiErrors": 0,
+      "responseCount": 6,
+      "correctCount": 5,
+      "statusCounts": {
+        "VALID": 5,
+        "INVALID_SCHEMA": 1
+      },
+      "responseAccuracy": 0.8333333333333334,
+      "endToEndSuccessRate": 0.8333333333333334,
+      "selectionCounts": {
+        "A16": 1,
+        "A20": 1,
+        "A03": 1,
+        "A02": 1,
+        "A17": 1
+      },
+      "selectionStability": 0.2
+    }
+  ],
+  "limitations": [
+    "Selection stability is modal share among valid responses; null with fewer than two valid responses.",
+    "API errors are retained separately; generation repetitions are not benchmark repetitions.",
+    "No automatic response repair or provider retry; --retry-errors appends a new API attempt.",
+    "Raw provider usage is retained; API dollar costs are not estimated.",
+    "Development cost catalog/score bounds are for pilot evidence, not publication.",
+    "Request-volume tiers mean scheduled business operations in a 600-second window; raw HTTP requests are reported separately.",
+    "Each passing sample must pass every hard gate; the aggregate suitable label requires at least 80% passing samples for that model/scenario/architecture/volume group."
+  ]
+}

@@ -1,0 +1,29 @@
+id: A19
+family: MODULAR_MONOLITH
+composeTemplate: infra/sut-templates/matrix-a19.compose.yaml
+cache:
+  enabled: false
+  targets: []
+messaging:
+  enabled: false
+  broker: NONE
+scalingProfile: DUAL_APP_PROXY
+communication: IN_PROCESS
+resourceProfile: matrix_a19_v1
+allowedRoles:
+  - api-gateway
+  - sut-monolith
+  - postgres
+resources:
+  api-gateway:
+    cpus: 0.2
+    memoryMiB: 256
+  sut-monolith:
+    cpus: 0.5
+    memoryMiB: 896
+  sut-monolith-2:
+    cpus: 0.5
+    memoryMiB: 896
+  postgres:
+    cpus: 0.5
+    memoryMiB: 1280

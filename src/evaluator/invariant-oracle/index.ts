@@ -155,6 +155,9 @@ async function checkCancelRestoresStock(databaseUrl: string, sutBaseUrl: string,
     const created = await requestJson(`${sutBaseUrl}/orders`, checkoutRequest(fixture.userId, fixture.productId, `oracle-cancel-${crypto.randomUUID()}`));
     const orderId = String(created.body['id'] ?? '');
     await waitForOrder(sutBaseUrl, orderId, ['CONFIRMED'], timeoutMs);
+    // Event-driven payment confirmation can precede the inventory commit.
+    // Read the cancellation baseline only after that reservation has settled.
+    await waitForInventorySettlement(databaseUrl, orderId, timeoutMs);
     const beforeCancel = await inventoryQuantity(databaseUrl, fixture.productId);
     const cancelled = await requestJson(`${sutBaseUrl}/orders/${orderId}/cancel`, { method: 'POST', headers: { 'X-Request-Id': crypto.randomUUID() } });
     const afterCancel = await inventoryQuantity(databaseUrl, fixture.productId);
@@ -230,6 +233,25 @@ async function inventoryQuantity(databaseUrl: string, productId: string): Promis
 
 function failedOracle(id: string, name: string, severity: 'CRITICAL' | 'WARNING', err: unknown): InvariantResult {
   return { id, name, passed: false, details: err instanceof Error ? err.message : String(err), severity };
+}
+
+async function waitForInventorySettlement(databaseUrl: string, orderId: string, timeoutMs: number): Promise<void> {
+  const { default: pg } = await import('pg');
+  const client = new pg.Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const result = await client.query<{ inventory_reserved: boolean }>(
+        'SELECT inventory_reserved FROM orders WHERE id = $1', [orderId],
+      );
+      if (result.rows[0]?.inventory_reserved === false) return;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error(`Order ${orderId} inventory reservation did not settle`);
+  } finally {
+    await client.end();
+  }
 }
 
 async function checkInvariant(

@@ -1,0 +1,2143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "supported-architecture-candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "candidateId",
+    "architectureId",
+    "architectureFamily",
+    "priorities",
+    "components",
+    "decisions",
+    "assumptions",
+    "rationale"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "candidateId": {
+      "type": "string"
+    },
+    "architectureId": {
+      "type": "string",
+      "pattern": "^A\\d{2}$"
+    },
+    "architectureFamily": {
+      "type": "string",
+      "enum": [
+        "MODULAR_MONOLITH",
+        "REST_MICROSERVICES",
+        "EVENT_DRIVEN_MICROSERVICES"
+      ]
+    },
+    "priorities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "metric",
+          "operator",
+          "weight"
+        ],
+        "properties": {
+          "metric": {
+            "type": "string",
+            "enum": [
+              "p99_ms",
+              "error_rate",
+              "throughput_rps",
+              "monthly_cost_usd",
+              "engineering_effort",
+              "scalability",
+              "recovery_time_s"
+            ]
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "LTE",
+              "GTE",
+              "MIN",
+              "MAX"
+            ]
+          },
+          "target": {
+            "type": "number"
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "decisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cache",
+        "messaging",
+        "scalingProfile",
+        "communication"
+      ],
+      "properties": {
+        "cache": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "targets"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "targets": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "product",
+                  "cart"
+                ]
+              }
+            },
+            "ttlSeconds": {
+              "type": "integer"
+            }
+          }
+        },
+        "messaging": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "broker"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "broker": {
+              "type": "string",
+              "enum": [
+                "NONE",
+                "RABBITMQ",
+                "POSTGRES"
+              ]
+            }
+          }
+        },
+        "scalingProfile": {
+          "type": "string",
+          "enum": [
+            "SINGLE_INSTANCE",
+            "DUAL_APP_PROXY",
+            "ONE_PER_SERVICE",
+            "CATALOG_SCALED",
+            "ORDER_SCALED",
+            "DUAL_APP_PROXY_ASYNC",
+            "QUEUE_SINGLE_API",
+            "QUEUE_DUAL_API",
+            "QUEUE_DUAL_WORKER",
+            "QUEUE_SINGLE_API_DUAL_WORKER"
+          ]
+        },
+        "communication": {
+          "type": "string",
+          "enum": [
+            "IN_PROCESS",
+            "HTTP_JSON",
+            "AMQP_EVENT",
+            "POSTGRES_QUEUE"
+          ]
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 240
+      }
+    },
+    "rationale": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 240
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A01"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "sut-monolith",
+            "postgres"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": false,
+              "targets": []
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "SINGLE_INSTANCE",
+            "communication": "IN_PROCESS"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A02"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "sut-monolith",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product",
+                "cart"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "SINGLE_INSTANCE",
+            "communication": "IN_PROCESS"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A03"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product",
+                "cart"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "DUAL_APP_PROXY",
+            "communication": "IN_PROCESS"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A04"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "notification-mock",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product",
+                "cart"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "DUAL_APP_PROXY_ASYNC",
+            "communication": "IN_PROCESS"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A05"
+        },
+        "architectureFamily": {
+          "const": "REST_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "payment-mock",
+            "notification-mock",
+            "postgres"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": false,
+              "targets": []
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "ONE_PER_SERVICE",
+            "communication": "HTTP_JSON"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A06"
+        },
+        "architectureFamily": {
+          "const": "REST_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product",
+                "cart"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "ONE_PER_SERVICE",
+            "communication": "HTTP_JSON"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A07"
+        },
+        "architectureFamily": {
+          "const": "REST_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product",
+                "cart"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "CATALOG_SCALED",
+            "communication": "HTTP_JSON"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A08"
+        },
+        "architectureFamily": {
+          "const": "REST_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product",
+                "cart"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "ORDER_SCALED",
+            "communication": "HTTP_JSON"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A09"
+        },
+        "architectureFamily": {
+          "const": "EVENT_DRIVEN_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "event-worker",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "rabbitmq"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": false,
+              "targets": []
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "RABBITMQ"
+            },
+            "scalingProfile": "ONE_PER_SERVICE",
+            "communication": "AMQP_EVENT"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A10"
+        },
+        "architectureFamily": {
+          "const": "EVENT_DRIVEN_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "event-worker",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "rabbitmq",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product",
+                "cart"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "RABBITMQ"
+            },
+            "scalingProfile": "ONE_PER_SERVICE",
+            "communication": "AMQP_EVENT"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A11"
+        },
+        "architectureFamily": {
+          "const": "EVENT_DRIVEN_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service-1",
+            "catalog-service-2",
+            "inventory-service",
+            "order-service",
+            "event-worker",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "rabbitmq",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product",
+                "cart"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "RABBITMQ"
+            },
+            "scalingProfile": "CATALOG_SCALED",
+            "communication": "AMQP_EVENT"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A12"
+        },
+        "architectureFamily": {
+          "const": "EVENT_DRIVEN_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service-1",
+            "order-service-2",
+            "event-worker-1",
+            "event-worker-2",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "rabbitmq",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product",
+                "cart"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "RABBITMQ"
+            },
+            "scalingProfile": "ORDER_SCALED",
+            "communication": "AMQP_EVENT"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A13"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "postgres",
+            "pg-queue-worker"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": false,
+              "targets": []
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_SINGLE_API",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A14"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "sut-monolith-2",
+            "postgres",
+            "pg-queue-worker"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": false,
+              "targets": []
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_DUAL_API",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A15"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "sut-monolith-2",
+            "postgres",
+            "redis",
+            "pg-queue-worker"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_DUAL_API",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A16"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "sut-monolith-2",
+            "postgres",
+            "redis",
+            "pg-queue-worker",
+            "pg-queue-worker-2"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_DUAL_WORKER",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A17"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "sut-monolith",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "SINGLE_INSTANCE",
+            "communication": "IN_PROCESS"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A18"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "sut-monolith",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "cart"
+              ]
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "SINGLE_INSTANCE",
+            "communication": "IN_PROCESS"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A19"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "postgres"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": false,
+              "targets": []
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "DUAL_APP_PROXY",
+            "communication": "IN_PROCESS"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A20"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "DUAL_APP_PROXY",
+            "communication": "IN_PROCESS"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A21"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "cart"
+              ]
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "DUAL_APP_PROXY",
+            "communication": "IN_PROCESS"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A22"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "notification-mock",
+            "postgres"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": false,
+              "targets": []
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "DUAL_APP_PROXY_ASYNC",
+            "communication": "IN_PROCESS"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A23"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "notification-mock",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "DUAL_APP_PROXY_ASYNC",
+            "communication": "IN_PROCESS"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A24"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "notification-mock",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "cart"
+              ]
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "DUAL_APP_PROXY_ASYNC",
+            "communication": "IN_PROCESS"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A25"
+        },
+        "architectureFamily": {
+          "const": "REST_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "ONE_PER_SERVICE",
+            "communication": "HTTP_JSON"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A26"
+        },
+        "architectureFamily": {
+          "const": "REST_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "cart"
+              ]
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "ONE_PER_SERVICE",
+            "communication": "HTTP_JSON"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A27"
+        },
+        "architectureFamily": {
+          "const": "REST_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "payment-mock",
+            "notification-mock",
+            "postgres"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": false,
+              "targets": []
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "CATALOG_SCALED",
+            "communication": "HTTP_JSON"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A28"
+        },
+        "architectureFamily": {
+          "const": "REST_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "CATALOG_SCALED",
+            "communication": "HTTP_JSON"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A29"
+        },
+        "architectureFamily": {
+          "const": "REST_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "cart"
+              ]
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "CATALOG_SCALED",
+            "communication": "HTTP_JSON"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A30"
+        },
+        "architectureFamily": {
+          "const": "REST_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "payment-mock",
+            "notification-mock",
+            "postgres"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": false,
+              "targets": []
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "ORDER_SCALED",
+            "communication": "HTTP_JSON"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A31"
+        },
+        "architectureFamily": {
+          "const": "REST_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "ORDER_SCALED",
+            "communication": "HTTP_JSON"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A32"
+        },
+        "architectureFamily": {
+          "const": "REST_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "cart"
+              ]
+            },
+            "messaging": {
+              "enabled": false,
+              "broker": "NONE"
+            },
+            "scalingProfile": "ORDER_SCALED",
+            "communication": "HTTP_JSON"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A33"
+        },
+        "architectureFamily": {
+          "const": "EVENT_DRIVEN_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "event-worker",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "rabbitmq",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "RABBITMQ"
+            },
+            "scalingProfile": "ONE_PER_SERVICE",
+            "communication": "AMQP_EVENT"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A34"
+        },
+        "architectureFamily": {
+          "const": "EVENT_DRIVEN_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service",
+            "event-worker",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "rabbitmq",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "cart"
+              ]
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "RABBITMQ"
+            },
+            "scalingProfile": "ONE_PER_SERVICE",
+            "communication": "AMQP_EVENT"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A35"
+        },
+        "architectureFamily": {
+          "const": "EVENT_DRIVEN_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service-1",
+            "catalog-service-2",
+            "inventory-service",
+            "order-service",
+            "event-worker",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "rabbitmq"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": false,
+              "targets": []
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "RABBITMQ"
+            },
+            "scalingProfile": "CATALOG_SCALED",
+            "communication": "AMQP_EVENT"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A36"
+        },
+        "architectureFamily": {
+          "const": "EVENT_DRIVEN_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service-1",
+            "catalog-service-2",
+            "inventory-service",
+            "order-service",
+            "event-worker",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "rabbitmq",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "RABBITMQ"
+            },
+            "scalingProfile": "CATALOG_SCALED",
+            "communication": "AMQP_EVENT"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A37"
+        },
+        "architectureFamily": {
+          "const": "EVENT_DRIVEN_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service-1",
+            "catalog-service-2",
+            "inventory-service",
+            "order-service",
+            "event-worker",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "rabbitmq",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "cart"
+              ]
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "RABBITMQ"
+            },
+            "scalingProfile": "CATALOG_SCALED",
+            "communication": "AMQP_EVENT"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A38"
+        },
+        "architectureFamily": {
+          "const": "EVENT_DRIVEN_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service-1",
+            "order-service-2",
+            "event-worker-1",
+            "event-worker-2",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "rabbitmq"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": false,
+              "targets": []
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "RABBITMQ"
+            },
+            "scalingProfile": "ORDER_SCALED",
+            "communication": "AMQP_EVENT"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A39"
+        },
+        "architectureFamily": {
+          "const": "EVENT_DRIVEN_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service-1",
+            "order-service-2",
+            "event-worker-1",
+            "event-worker-2",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "rabbitmq",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "RABBITMQ"
+            },
+            "scalingProfile": "ORDER_SCALED",
+            "communication": "AMQP_EVENT"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A40"
+        },
+        "architectureFamily": {
+          "const": "EVENT_DRIVEN_MICROSERVICES"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "user-service",
+            "catalog-service",
+            "inventory-service",
+            "order-service-1",
+            "order-service-2",
+            "event-worker-1",
+            "event-worker-2",
+            "payment-mock",
+            "notification-mock",
+            "postgres",
+            "rabbitmq",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "cart"
+              ]
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "RABBITMQ"
+            },
+            "scalingProfile": "ORDER_SCALED",
+            "communication": "AMQP_EVENT"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A41"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "postgres",
+            "pg-queue-worker",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_SINGLE_API",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A42"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "postgres",
+            "pg-queue-worker",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "cart"
+              ]
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_SINGLE_API",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A43"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "postgres",
+            "pg-queue-worker",
+            "redis"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product",
+                "cart"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_SINGLE_API",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A44"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "sut-monolith-2",
+            "postgres",
+            "redis",
+            "pg-queue-worker"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "cart"
+              ]
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_DUAL_API",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A45"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "sut-monolith-2",
+            "postgres",
+            "redis",
+            "pg-queue-worker"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product",
+                "cart"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_DUAL_API",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A46"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "sut-monolith-2",
+            "postgres",
+            "pg-queue-worker",
+            "pg-queue-worker-2"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": false,
+              "targets": []
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_DUAL_WORKER",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A47"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "sut-monolith-2",
+            "postgres",
+            "redis",
+            "pg-queue-worker",
+            "pg-queue-worker-2"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "cart"
+              ]
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_DUAL_WORKER",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A48"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "sut-monolith-2",
+            "postgres",
+            "redis",
+            "pg-queue-worker",
+            "pg-queue-worker-2"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product",
+                "cart"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_DUAL_WORKER",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A49"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "postgres",
+            "pg-queue-worker",
+            "pg-queue-worker-2"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": false,
+              "targets": []
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_SINGLE_API_DUAL_WORKER",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A50"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "postgres",
+            "redis",
+            "pg-queue-worker",
+            "pg-queue-worker-2"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_SINGLE_API_DUAL_WORKER",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A51"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "postgres",
+            "redis",
+            "pg-queue-worker",
+            "pg-queue-worker-2"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "cart"
+              ]
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_SINGLE_API_DUAL_WORKER",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "architectureId": {
+          "const": "A52"
+        },
+        "architectureFamily": {
+          "const": "MODULAR_MONOLITH"
+        },
+        "components": {
+          "const": [
+            "api-gateway",
+            "sut-monolith",
+            "postgres",
+            "redis",
+            "pg-queue-worker",
+            "pg-queue-worker-2"
+          ]
+        },
+        "decisions": {
+          "const": {
+            "cache": {
+              "enabled": true,
+              "targets": [
+                "product",
+                "cart"
+              ],
+              "ttlSeconds": 60
+            },
+            "messaging": {
+              "enabled": true,
+              "broker": "POSTGRES"
+            },
+            "scalingProfile": "QUEUE_SINGLE_API_DUAL_WORKER",
+            "communication": "POSTGRES_QUEUE"
+          }
+        }
+      }
+    }
+  ]
+}

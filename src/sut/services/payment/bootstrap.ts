@@ -1,3 +1,4 @@
+import { loadRegistry } from '../../../evaluator/registry/index.js';
 import type { AppConfig } from '../../../config/env.js';
 import { loadSutConfig } from '../../../config/sut-env.js';
 import type { Logger } from '../../../utils/logger.js';
@@ -11,11 +12,12 @@ import { createPool } from '../../shared/database/pool.js';
 import { ensureReliabilitySchema } from '../../shared/database/reliability.js';
 import { DomainError } from '../../shared/errors/domain-errors.js';
 
-const EVENT_DRIVEN_ARCHITECTURES = new Set(['A09', 'A10', 'A11', 'A12']);
 
 export async function bootstrapPaymentMock(_appConfig: AppConfig, logger: Logger): Promise<void> {
   const config = loadSutConfig();
   const archId = config.ARCHITECTURE_ID;
+  const profile = loadRegistry().get(archId);
+  if (!profile) throw new Error(`Unknown architecture ${archId}`);
   logger.info({ architectureId: archId }, 'Bootstrapping Payment Mock Service');
 
   const pool = createPool({ connectionString: config.DATABASE_URL, max: config.DB_POOL_MAX, applicationName: `payment-${archId}` });
@@ -37,7 +39,7 @@ export async function bootstrapPaymentMock(_appConfig: AppConfig, logger: Logger
   finalizeSutApp(app, logger);
 
   let rabbitmq: RabbitMQClient | undefined;
-  if (EVENT_DRIVEN_ARCHITECTURES.has(archId)) {
+  if (profile.messaging.broker === 'RABBITMQ') {
     const rmqUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
     rabbitmq = new RabbitMQClient(rmqUrl, logger, db);
     await rabbitmq.connect();

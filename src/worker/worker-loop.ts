@@ -5,10 +5,11 @@ import type { Logger } from '../utils/logger.js';
 import type { AppConfig } from '../config/env.js';
 import { validateCandidate } from '../evaluator/architecture-validator/index.js';
 import { loadRegistry } from '../evaluator/registry/index.js';
+import { applicationInstanceCount } from '../evaluator/registry/audit.js';
 import { renderCompose } from '../evaluator/compose-renderer/index.js';
 import { deployCompose, cleanupCompose, getComposeLogs, healthCheck, inspectComposeHealth } from '../evaluator/docker-runner/index.js';
 import { runK6Load } from '../evaluator/load-runner/index.js';
-import { collectApplicationMetrics, collectContainerStatsSeries, collectPrometheusMetrics, configurePrometheusSutTarget, saveMetricsArtifacts } from '../evaluator/metrics-collector/index.js';
+import { collectApplicationMetrics, collectContainerStatsSeries, collectPrometheusMetrics, configurePrometheusSutTarget, saveMetricsArtifacts, CONTAINER_STATS_INTERVAL_MS, RESOURCE_MEASUREMENT_VERSION, containerStatsCoverage } from '../evaluator/metrics-collector/index.js';
 import { runInvariantOracle } from '../evaluator/invariant-oracle/index.js';
 import { loadCostCatalog, computeCost } from '../evaluator/cost-engine/index.js';
 import { computeGates, computeScores, loadNormalizationBounds } from '../evaluator/score-engine/index.js';
@@ -103,8 +104,8 @@ export class WorkerLoop {
       this.logger.info({ runId }, 'Processing run');
 
       // Load experiment configuration
-      const runRow = db.prepare('SELECT experiment_id, run_number, load_rps, attempt FROM experiment_runs WHERE id = ?').get(runId) as {
-        experiment_id: string; run_number: number; load_rps: number; attempt: number;
+      const runRow = db.prepare('SELECT experiment_id, run_number, load_rps, target_operations, attempt FROM experiment_runs WHERE id = ?').get(runId) as {
+        experiment_id: string; run_number: number; load_rps: number; target_operations: number | null; attempt: number;
       };
       db.prepare("UPDATE experiments SET status = 'RUNNING', updated_at = ? WHERE id = ?").run(new Date().toISOString(), runRow.experiment_id);
       const expRow = db.prepare('SELECT name, candidate_id, workload_profile, warmup_seconds, measure_seconds, cooldown_seconds, slo_json, cost_catalog_version, score_bounds_version, protocol_version, invalid_retry_limit, dataset_profile FROM experiments WHERE id = ?').get(runRow.experiment_id) as {
@@ -137,6 +138,7 @@ export class WorkerLoop {
         name: expRow.name,
         workloadProfile: expRow.workload_profile,
         loadRps: runRow.load_rps,
+        targetOperations: runRow.target_operations,
         warmupSeconds: expRow.warmup_seconds,
         measureSeconds: expRow.measure_seconds,
         cooldownSeconds: expRow.cooldown_seconds,
@@ -201,7 +203,7 @@ export class WorkerLoop {
         profile: expRow.dataset_profile,
         logger: this.logger,
       });
-      await flushExternalState(projectName, profile.cache.enabled, profile.messaging.enabled, this.logger);
+      await flushExternalState(projectName, profile.cache.enabled, profile.messaging.broker === 'RABBITMQ', this.logger);
 
       // Phase: READY_CHECK
       stateMachine.transitionTo('READY_CHECK');
@@ -267,6 +269,7 @@ export class WorkerLoop {
         loadResult = await runK6Load({
           workloadProfile: expRow.workload_profile,
           targetRps: runRow.load_rps,
+          ...(runRow.target_operations === null ? {} : { targetOperations: runRow.target_operations }),
           durationSeconds: expRow.measure_seconds,
           warmupSeconds: 0,
           cooldownSeconds: expRow.cooldown_seconds,
@@ -334,9 +337,9 @@ export class WorkerLoop {
           totalVCPU,
           totalMemoryGiB,
           hasRedis: profile.cache.enabled,
-          hasRabbitMQ: profile.messaging.enabled,
+          hasRabbitMQ: profile.messaging.broker === 'RABBITMQ',
           hasLoadBalancer: profile.allowedRoles.includes('api-gateway'),
-          replicaCount: profile.allowedRoles.filter((role) => role.includes('replica')).length + 1,
+          replicaCount: applicationInstanceCount(profile),
           storageGiB: 10,
           egressGiBPerMonth: 50,
         },
@@ -347,8 +350,8 @@ export class WorkerLoop {
       );
 
       // Compute gates
-      const expectedSamples = Math.max(1, Math.floor(expRow.measure_seconds / 2));
-      const containerCoverage = Math.min(100, (containerStats.length / expectedSamples) * 100);
+      const expectedSamples = Math.max(1, Math.floor(expRow.measure_seconds * 1000 / CONTAINER_STATS_INTERVAL_MS));
+      const containerCoverage = containerStatsCoverage(containerStats, measurementStartedAt, expRow.measure_seconds);
       const prometheusCoverage = ('http_requests_total' in prometheusMetrics
         || 'cpu_usage_seconds' in prometheusMetrics) ? 100 : 0;
       const applicationCoverage = applicationMetrics.includes('http_server_requests_total') ? 100 : 0;
@@ -366,6 +369,10 @@ export class WorkerLoop {
         minimumSampleCount: 1,
         offeredRps: runRow.load_rps,
         achievedOperationRps: loadResult.achievedRps,
+        ...(runRow.target_operations === null ? {} : {
+          targetOperations: runRow.target_operations,
+          completedOperations: loadResult.totalIterations,
+        }),
         oomKills: containerHealth.oomKills,
         unexpectedCrashes: containerHealth.unexpectedCrashes,
       });
@@ -383,7 +390,7 @@ export class WorkerLoop {
           cpuEfficiency,
           memoryPeakMiB,
           costMonth: cost.infraMonth,
-          consistencyViolations: invariantResult.violations.length,
+          consistencyViolations: invariantResult.violations.filter(v => !v.passed).length,
         },
         bounds,
         Array.isArray(candidateJson.priorities) ? candidateJson.priorities : [],
@@ -392,6 +399,11 @@ export class WorkerLoop {
       );
       const derivedMetrics = {
         ...loadResult,
+        resourceMeasurementVersion: RESOURCE_MEASUREMENT_VERSION,
+        containerStatsIntervalMs: CONTAINER_STATS_INTERVAL_MS,
+        expectedContainerStatsSamples: expectedSamples,
+        actualContainerStatsSamples: containerStats.length,
+        gateEvaluationVersion: '2.0.0',
         p50Ms: loadResult.httpReqDuration.p50,
         p95Ms: loadResult.httpReqDuration.p95,
         p99Ms: loadResult.httpReqDuration.p99,
@@ -410,6 +422,7 @@ export class WorkerLoop {
         protocolVersion: expRow.protocol_version,
         workload: expRow.workload_profile,
         loadRps: runRow.load_rps,
+        targetOperations: runRow.target_operations,
         metrics: derivedMetrics as unknown as Record<string, unknown>,
         cost: cost as unknown as Record<string, unknown>,
         gates: gates as unknown as Record<string, unknown>,
@@ -421,6 +434,9 @@ export class WorkerLoop {
 
       writeFileSync(path.join(runDir, 'environment.json'), JSON.stringify({
         node: process.version,
+        resourceMeasurementVersion: RESOURCE_MEASUREMENT_VERSION,
+        containerStatsIntervalMs: CONTAINER_STATS_INTERVAL_MS,
+        gateEvaluationVersion: '2.0.0',
         platform: process.platform,
         platformRelease: os.release(),
         cpuModel: os.cpus()[0]?.model ?? 'unknown',
@@ -467,18 +483,22 @@ export class WorkerLoop {
       const infrastructureInvalid = gates.gates.some((gate) =>
         !gate.passed && ['GATE_MEASUREMENT_VALID', 'GATE_LOAD_GENERATOR_CPU'].includes(gate.code));
       if (infrastructureInvalid) {
+        const invalidReason = gates.gates.filter(gate => !gate.passed
+          && ['GATE_MEASUREMENT_VALID', 'GATE_LOAD_GENERATOR_CPU'].includes(gate.code))
+          .map(gate => `${gate.code}: ${gate.observed}; required ${gate.threshold}`).join('; ');
         if (runRow.attempt < expRow.invalid_retry_limit) {
-          db.prepare(`INSERT INTO experiment_runs (id, experiment_id, run_number, load_rps, state, attempt)
-            VALUES (?, ?, ?, ?, 'PENDING', ?)`).run(
-            crypto.randomUUID(), runRow.experiment_id, runRow.run_number, runRow.load_rps, runRow.attempt + 1,
+          db.prepare(`INSERT INTO experiment_runs (id, experiment_id, run_number, load_rps, target_operations, state, attempt)
+            VALUES (?, ?, ?, ?, ?, 'PENDING', ?)`).run(
+            crypto.randomUUID(), runRow.experiment_id, runRow.run_number, runRow.load_rps,
+            runRow.target_operations, runRow.attempt + 1,
           );
           db.prepare("UPDATE experiment_runs SET failure_code = 'INFRA_INVALID_RETRIED', failure_message = ? WHERE id = ?")
-            .run('Infrastructure-invalid evidence archived; one deterministic retry queued', runId);
+            .run(`Infrastructure-invalid evidence archived; deterministic retry queued. ${invalidReason}`, runId);
           outcome = 'FAILED';
           failureMessage = 'Infrastructure-invalid run retried';
         } else {
           db.prepare("UPDATE experiment_runs SET failure_code = 'INFRA_INVALID_EXHAUSTED', failure_message = ? WHERE id = ?")
-            .run('Infrastructure-invalid measurement after deterministic retry', runId);
+            .run(`Infrastructure-invalid measurement; retry limit ${expRow.invalid_retry_limit} exhausted. ${invalidReason}`, runId);
           outcome = 'FAILED';
           failureMessage = 'Infrastructure-invalid retry exhausted';
         }
@@ -602,13 +622,13 @@ async function loadWorkloadIds(databaseUrl: string): Promise<{ productIds: strin
 
 function updateParentExperimentStatus(experimentId: string): void {
   const db = getEvaluatorDb();
-  const attempts = db.prepare(`SELECT run_number, load_rps, attempt, state FROM experiment_runs
-    WHERE experiment_id = ? ORDER BY load_rps, run_number, attempt DESC`).all(experimentId) as Array<{
-      run_number: number; load_rps: number; attempt: number; state: string;
+  const attempts = db.prepare(`SELECT run_number, load_rps, target_operations, attempt, state FROM experiment_runs
+    WHERE experiment_id = ? ORDER BY COALESCE(target_operations, load_rps), run_number, attempt DESC`).all(experimentId) as Array<{
+      run_number: number; load_rps: number; target_operations: number | null; attempt: number; state: string;
     }>;
   const latestBySlot = new Map<string, { state: string }>();
   for (const attempt of attempts) {
-    const key = `${attempt.load_rps}:${attempt.run_number}`;
+    const key = `${attempt.target_operations ?? attempt.load_rps}:${attempt.run_number}`;
     if (!latestBySlot.has(key)) latestBySlot.set(key, attempt);
   }
   const states = [...latestBySlot.values()];

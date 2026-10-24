@@ -63,7 +63,7 @@ curl -fsS http://localhost:8088/api/v1/health
 curl -fsS http://localhost:8088/api/v1/ready
 ```
 
-Open `http://localhost:8088/architectures`, choose any A01–A12 card, click
+Open `http://localhost:8088/architectures`, choose any A01–A52 card, click
 **Stress test**, freeze the workload/SLO/protocol fields, and queue it. The detail
 page receives state transitions and metric snapshots by SSE and falls back to
 polling if the stream disconnects.

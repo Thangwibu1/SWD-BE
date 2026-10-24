@@ -36,6 +36,8 @@ export function renderCompose(options: RenderOptions): RenderedCompose {
   const services = compose.services as Record<string, Record<string, unknown>>;
   const roleForService = (serviceName: string): string => {
     if (serviceName === 'app') {
+      const appRole = (services[serviceName]?.environment as Record<string, unknown> | undefined)?.APP_ROLE;
+      if (typeof appRole === 'string') return appRole;
       return options.profile.family === 'MODULAR_MONOLITH' ? 'sut-monolith' : 'api-gateway';
     }
     // Registry roles describe a logical service. Scaled templates use
@@ -70,7 +72,8 @@ export function renderCompose(options: RenderOptions): RenderedCompose {
     svc.init = true;
     svc.logging = { driver: 'json-file', options: { 'max-size': '10m', 'max-file': '3' } };
     svc.ulimits = { nofile: { soft: 65535, hard: 65535 } };
-    const resourceAlloc = options.profile.resources?.[serviceName];
+    const resourceAlloc = options.profile.resources?.[serviceName]
+      ?? (serviceName === 'app' ? options.profile.resources?.[roleForService(serviceName)] : undefined);
     if (resourceAlloc) {
       svc.cpus = resourceAlloc.cpus.toString();
       svc.mem_limit = `${resourceAlloc.memoryMiB}m`;

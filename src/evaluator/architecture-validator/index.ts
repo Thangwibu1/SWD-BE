@@ -16,11 +16,12 @@ export interface ValidationResult {
 }
 
 interface CandidateJSON {
+  components: string[];
   architectureId: string;
   architectureFamily: string;
   decisions: {
-    cache: { enabled: boolean };
-    messaging: { broker: string };
+    cache: { enabled: boolean; targets: string[]; ttlSeconds?: number };
+    messaging: { enabled: boolean; broker: string };
     scalingProfile: string;
     communication: string;
   };
@@ -64,12 +65,20 @@ export function validateCandidate(candidateJson: unknown): ValidationResult {
 
   if (
     profile.cache.enabled !== candidate.decisions.cache.enabled ||
+    JSON.stringify([...(profile.cache.targets ?? [])].sort()) !== JSON.stringify([...candidate.decisions.cache.targets].sort()) ||
+    (candidate.decisions.cache.ttlSeconds !== undefined && (!profile.cache.targets?.includes('product') || candidate.decisions.cache.ttlSeconds !== 60)) ||
+    profile.messaging.enabled !== candidate.decisions.messaging.enabled ||
     profile.messaging.broker !== candidate.decisions.messaging.broker ||
     profile.scalingProfile !== candidate.decisions.scalingProfile ||
     profile.communication !== candidate.decisions.communication
   ) {
     errors.push({ message: `VAL-004 PROFILE_MISMATCH: decisions do not match registry profile` });
     return { valid: false, code: 'VAL-004', errors };
+  }
+
+  if (JSON.stringify([...profile.allowedRoles].sort()) !== JSON.stringify([...candidate.components].sort())) {
+    errors.push({ message: 'VAL-007 COMPONENT_MISMATCH: components must exactly match the supported profile' });
+    return { valid: false, code: 'VAL-007', errors };
   }
 
   // Total weight

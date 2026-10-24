@@ -1,0 +1,457 @@
+[
+  {
+    "architectureId": "A01",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "SINGLE_INSTANCE",
+    "broker": "NONE",
+    "cacheTargets": []
+  },
+  {
+    "architectureId": "A17",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "SINGLE_INSTANCE",
+    "broker": "NONE",
+    "cacheTargets": [
+      "product"
+    ]
+  },
+  {
+    "architectureId": "A18",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "SINGLE_INSTANCE",
+    "broker": "NONE",
+    "cacheTargets": [
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A02",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "SINGLE_INSTANCE",
+    "broker": "NONE",
+    "cacheTargets": [
+      "product",
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A19",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "DUAL_APP_PROXY",
+    "broker": "NONE",
+    "cacheTargets": []
+  },
+  {
+    "architectureId": "A20",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "DUAL_APP_PROXY",
+    "broker": "NONE",
+    "cacheTargets": [
+      "product"
+    ]
+  },
+  {
+    "architectureId": "A21",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "DUAL_APP_PROXY",
+    "broker": "NONE",
+    "cacheTargets": [
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A03",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "DUAL_APP_PROXY",
+    "broker": "NONE",
+    "cacheTargets": [
+      "product",
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A22",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "DUAL_APP_PROXY_ASYNC",
+    "broker": "NONE",
+    "cacheTargets": []
+  },
+  {
+    "architectureId": "A23",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "DUAL_APP_PROXY_ASYNC",
+    "broker": "NONE",
+    "cacheTargets": [
+      "product"
+    ]
+  },
+  {
+    "architectureId": "A24",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "DUAL_APP_PROXY_ASYNC",
+    "broker": "NONE",
+    "cacheTargets": [
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A04",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "DUAL_APP_PROXY_ASYNC",
+    "broker": "NONE",
+    "cacheTargets": [
+      "product",
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A05",
+    "family": "REST_MICROSERVICES",
+    "scalingProfile": "ONE_PER_SERVICE",
+    "broker": "NONE",
+    "cacheTargets": []
+  },
+  {
+    "architectureId": "A25",
+    "family": "REST_MICROSERVICES",
+    "scalingProfile": "ONE_PER_SERVICE",
+    "broker": "NONE",
+    "cacheTargets": [
+      "product"
+    ]
+  },
+  {
+    "architectureId": "A26",
+    "family": "REST_MICROSERVICES",
+    "scalingProfile": "ONE_PER_SERVICE",
+    "broker": "NONE",
+    "cacheTargets": [
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A06",
+    "family": "REST_MICROSERVICES",
+    "scalingProfile": "ONE_PER_SERVICE",
+    "broker": "NONE",
+    "cacheTargets": [
+      "product",
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A27",
+    "family": "REST_MICROSERVICES",
+    "scalingProfile": "CATALOG_SCALED",
+    "broker": "NONE",
+    "cacheTargets": []
+  },
+  {
+    "architectureId": "A28",
+    "family": "REST_MICROSERVICES",
+    "scalingProfile": "CATALOG_SCALED",
+    "broker": "NONE",
+    "cacheTargets": [
+      "product"
+    ]
+  },
+  {
+    "architectureId": "A29",
+    "family": "REST_MICROSERVICES",
+    "scalingProfile": "CATALOG_SCALED",
+    "broker": "NONE",
+    "cacheTargets": [
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A07",
+    "family": "REST_MICROSERVICES",
+    "scalingProfile": "CATALOG_SCALED",
+    "broker": "NONE",
+    "cacheTargets": [
+      "product",
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A30",
+    "family": "REST_MICROSERVICES",
+    "scalingProfile": "ORDER_SCALED",
+    "broker": "NONE",
+    "cacheTargets": []
+  },
+  {
+    "architectureId": "A31",
+    "family": "REST_MICROSERVICES",
+    "scalingProfile": "ORDER_SCALED",
+    "broker": "NONE",
+    "cacheTargets": [
+      "product"
+    ]
+  },
+  {
+    "architectureId": "A32",
+    "family": "REST_MICROSERVICES",
+    "scalingProfile": "ORDER_SCALED",
+    "broker": "NONE",
+    "cacheTargets": [
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A08",
+    "family": "REST_MICROSERVICES",
+    "scalingProfile": "ORDER_SCALED",
+    "broker": "NONE",
+    "cacheTargets": [
+      "product",
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A09",
+    "family": "EVENT_DRIVEN_MICROSERVICES",
+    "scalingProfile": "ONE_PER_SERVICE",
+    "broker": "RABBITMQ",
+    "cacheTargets": []
+  },
+  {
+    "architectureId": "A33",
+    "family": "EVENT_DRIVEN_MICROSERVICES",
+    "scalingProfile": "ONE_PER_SERVICE",
+    "broker": "RABBITMQ",
+    "cacheTargets": [
+      "product"
+    ]
+  },
+  {
+    "architectureId": "A34",
+    "family": "EVENT_DRIVEN_MICROSERVICES",
+    "scalingProfile": "ONE_PER_SERVICE",
+    "broker": "RABBITMQ",
+    "cacheTargets": [
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A10",
+    "family": "EVENT_DRIVEN_MICROSERVICES",
+    "scalingProfile": "ONE_PER_SERVICE",
+    "broker": "RABBITMQ",
+    "cacheTargets": [
+      "product",
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A35",
+    "family": "EVENT_DRIVEN_MICROSERVICES",
+    "scalingProfile": "CATALOG_SCALED",
+    "broker": "RABBITMQ",
+    "cacheTargets": []
+  },
+  {
+    "architectureId": "A36",
+    "family": "EVENT_DRIVEN_MICROSERVICES",
+    "scalingProfile": "CATALOG_SCALED",
+    "broker": "RABBITMQ",
+    "cacheTargets": [
+      "product"
+    ]
+  },
+  {
+    "architectureId": "A37",
+    "family": "EVENT_DRIVEN_MICROSERVICES",
+    "scalingProfile": "CATALOG_SCALED",
+    "broker": "RABBITMQ",
+    "cacheTargets": [
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A11",
+    "family": "EVENT_DRIVEN_MICROSERVICES",
+    "scalingProfile": "CATALOG_SCALED",
+    "broker": "RABBITMQ",
+    "cacheTargets": [
+      "product",
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A38",
+    "family": "EVENT_DRIVEN_MICROSERVICES",
+    "scalingProfile": "ORDER_SCALED",
+    "broker": "RABBITMQ",
+    "cacheTargets": []
+  },
+  {
+    "architectureId": "A39",
+    "family": "EVENT_DRIVEN_MICROSERVICES",
+    "scalingProfile": "ORDER_SCALED",
+    "broker": "RABBITMQ",
+    "cacheTargets": [
+      "product"
+    ]
+  },
+  {
+    "architectureId": "A40",
+    "family": "EVENT_DRIVEN_MICROSERVICES",
+    "scalingProfile": "ORDER_SCALED",
+    "broker": "RABBITMQ",
+    "cacheTargets": [
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A12",
+    "family": "EVENT_DRIVEN_MICROSERVICES",
+    "scalingProfile": "ORDER_SCALED",
+    "broker": "RABBITMQ",
+    "cacheTargets": [
+      "product",
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A13",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_SINGLE_API",
+    "broker": "POSTGRES",
+    "cacheTargets": []
+  },
+  {
+    "architectureId": "A41",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_SINGLE_API",
+    "broker": "POSTGRES",
+    "cacheTargets": [
+      "product"
+    ]
+  },
+  {
+    "architectureId": "A42",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_SINGLE_API",
+    "broker": "POSTGRES",
+    "cacheTargets": [
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A43",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_SINGLE_API",
+    "broker": "POSTGRES",
+    "cacheTargets": [
+      "product",
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A14",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_DUAL_API",
+    "broker": "POSTGRES",
+    "cacheTargets": []
+  },
+  {
+    "architectureId": "A15",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_DUAL_API",
+    "broker": "POSTGRES",
+    "cacheTargets": [
+      "product"
+    ]
+  },
+  {
+    "architectureId": "A44",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_DUAL_API",
+    "broker": "POSTGRES",
+    "cacheTargets": [
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A45",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_DUAL_API",
+    "broker": "POSTGRES",
+    "cacheTargets": [
+      "product",
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A46",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_DUAL_WORKER",
+    "broker": "POSTGRES",
+    "cacheTargets": []
+  },
+  {
+    "architectureId": "A16",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_DUAL_WORKER",
+    "broker": "POSTGRES",
+    "cacheTargets": [
+      "product"
+    ]
+  },
+  {
+    "architectureId": "A47",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_DUAL_WORKER",
+    "broker": "POSTGRES",
+    "cacheTargets": [
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A48",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_DUAL_WORKER",
+    "broker": "POSTGRES",
+    "cacheTargets": [
+      "product",
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A49",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_SINGLE_API_DUAL_WORKER",
+    "broker": "POSTGRES",
+    "cacheTargets": []
+  },
+  {
+    "architectureId": "A50",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_SINGLE_API_DUAL_WORKER",
+    "broker": "POSTGRES",
+    "cacheTargets": [
+      "product"
+    ]
+  },
+  {
+    "architectureId": "A51",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_SINGLE_API_DUAL_WORKER",
+    "broker": "POSTGRES",
+    "cacheTargets": [
+      "cart"
+    ]
+  },
+  {
+    "architectureId": "A52",
+    "family": "MODULAR_MONOLITH",
+    "scalingProfile": "QUEUE_SINGLE_API_DUAL_WORKER",
+    "broker": "POSTGRES",
+    "cacheTargets": [
+      "product",
+      "cart"
+    ]
+  }
+]

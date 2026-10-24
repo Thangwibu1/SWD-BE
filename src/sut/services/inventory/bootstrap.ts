@@ -1,3 +1,4 @@
+import { loadRegistry } from '../../../evaluator/registry/index.js';
 import type { AppConfig } from '../../../config/env.js';
 import { loadSutConfig } from '../../../config/sut-env.js';
 import type { Logger } from '../../../utils/logger.js';
@@ -10,11 +11,12 @@ import { ensureReliabilitySchema } from '../../shared/database/reliability.js';
 import { createInventoryModule } from '../../monolith/inventory-module.js';
 import { RabbitMQClient } from '../../shared/events/rabbitmq.js';
 
-const EVENT_DRIVEN_ARCHITECTURES = new Set(['A09', 'A10', 'A11', 'A12']);
 
 export async function bootstrapInventoryService(_appConfig: AppConfig, logger: Logger): Promise<void> {
   const config = loadSutConfig();
   const archId = config.ARCHITECTURE_ID;
+  const profile = loadRegistry().get(archId);
+  if (!profile) throw new Error(`Unknown architecture ${archId}`);
   logger.info({ architectureId: archId }, 'Bootstrapping Inventory Service');
 
   const pool = createPool({
@@ -44,7 +46,7 @@ export async function bootstrapInventoryService(_appConfig: AppConfig, logger: L
   finalizeSutApp(app, logger);
 
   let rabbitmq: RabbitMQClient | undefined;
-  if (EVENT_DRIVEN_ARCHITECTURES.has(archId)) {
+  if (profile.messaging.broker === 'RABBITMQ') {
     const rmqUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
     rabbitmq = new RabbitMQClient(rmqUrl, logger, db);
     await rabbitmq.connect();

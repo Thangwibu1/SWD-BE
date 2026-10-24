@@ -1,3 +1,4 @@
+import { loadRegistry } from '../../../evaluator/registry/index.js';
 import type { AppConfig } from '../../../config/env.js';
 import { loadSutConfig } from '../../../config/sut-env.js';
 import type { Logger } from '../../../utils/logger.js';
@@ -14,20 +15,19 @@ import type { RestSagaDependencies } from './rest-saga.js';
 import { DomainError, DOMAIN_ERRORS } from '../../shared/errors/domain-errors.js';
 import type { DomainErrorCode } from '../../shared/errors/domain-errors.js';
 import { connectRedis, RedisCartStore } from '../../monolith/redis-cache.js';
-import { MemoryCartStore } from '../../monolith/cart-module.js';
-import type { CartStore } from '../../monolith/cart-module.js';
+import { createPgCart } from '../../monolith/pg-queue.js';
 import { createCartModule } from '../../monolith/cart-module.js';
 import { currentRequestId } from '../../shared/observability/request-context.js';
 import { RabbitMQClient } from '../../shared/events/rabbitmq.js';
 import type { EventEnvelope } from '../../shared/events/rabbitmq.js';
 import type { EventPublisher } from '../../monolith/order-module.js';
 
-const REDIS_CACHE_ARCHITECTURES = new Set(['A06', 'A07', 'A08', 'A10', 'A11', 'A12']);
-const EVENT_DRIVEN_ARCHITECTURES = new Set(['A09', 'A10', 'A11', 'A12']);
 
 export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logger): Promise<void> {
   const config = loadSutConfig();
   const archId = config.ARCHITECTURE_ID;
+  const profile = loadRegistry().get(archId);
+  if (!profile) throw new Error(`Unknown architecture ${archId}`);
   logger.info({ architectureId: archId }, 'Bootstrapping Order Service');
 
   const pool = createPool({
@@ -86,15 +86,15 @@ export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logge
     },
   };
 
-  let cartStore: CartStore = new MemoryCartStore();
-  if (REDIS_CACHE_ARCHITECTURES.has(archId)) {
+  let redisCart: RedisCartStore | undefined;
+  if (profile.cache.enabled && profile.cache.targets?.includes('cart')) {
     const redis = await connectRedis(config.REDIS_URL, logger);
-    cartStore = new RedisCartStore(redis);
+    redisCart = new RedisCartStore(redis);
     logger.info('Redis connected — cart store active');
   }
 
   let rabbitmq: RabbitMQClient | undefined;
-  if (EVENT_DRIVEN_ARCHITECTURES.has(archId)) {
+  if (profile.messaging.broker === 'RABBITMQ') {
     const rmqUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
     rabbitmq = new RabbitMQClient(rmqUrl, logger, db);
     await rabbitmq.connect();
@@ -114,7 +114,7 @@ export async function bootstrapOrderService(_appConfig: AppConfig, logger: Logge
     };
   }
 
-  const cart = createCartModule(cartStore);
+  const cart = redisCart ? createCartModule(redisCart) : createPgCart(db);
   const saga = publisher ? undefined : createRestSaga(db, { inventory, payments });
   const stopRecovery = saga ? startSagaRecovery(saga, logger) : undefined;
   const orders = saga ?? createOrderModule(db, createInventoryModule(db), payments, undefined, publisher);

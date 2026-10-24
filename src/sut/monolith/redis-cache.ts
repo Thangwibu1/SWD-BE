@@ -6,6 +6,7 @@ import type { CartStore } from './cart-module.js';
 import type { CartLine } from '../shared/domain/types.js';
 import type { Logger } from '../shared/../../utils/logger.js';
 import { getSutMetrics } from '../shared/observability/metrics.js';
+import { DomainError } from '../shared/errors/domain-errors.js';
 
 const DEFAULT_TTL_SECONDS = 60;
 
@@ -72,6 +73,17 @@ export class RedisProductCache implements ProductCache {
 export class RedisCartStore implements CartStore {
   constructor(private readonly client: RedisClient) {}
 
+  async upsert(userId: string, productId: string, quantity: number): Promise<CartLine[]> {
+    await this.client.hSet(`cart:${userId}`, productId, String(quantity));
+    return this.get(userId);
+  }
+
+  async remove(userId: string, productId: string): Promise<CartLine[]> {
+    const removed = await this.client.hDel(`cart:${userId}`, productId);
+    if (!removed) throw new DomainError('CART_ITEM_NOT_FOUND');
+    return this.get(userId);
+  }
+
   async get(userId: string): Promise<CartLine[]> {
     const hash = await this.client.hGetAll(`cart:${userId}`);
     return Object.entries(hash).map(([productId, qty]) => ({
@@ -82,14 +94,15 @@ export class RedisCartStore implements CartStore {
 
   async set(userId: string, items: CartLine[]): Promise<void> {
     const key = `cart:${userId}`;
-    await this.client.del(key);
+    const transaction = this.client.multi().del(key);
     if (items.length > 0) {
       const fields: Record<string, string> = {};
       for (const item of items) {
         fields[item.productId] = String(item.quantity);
       }
-      await this.client.hSet(key, fields);
+      transaction.hSet(key, fields);
     }
+    await transaction.exec();
   }
 
   async clear(userId: string): Promise<void> {

@@ -28,6 +28,14 @@ export async function ensureReliabilitySchema(db: Database): Promise<void> {
         request jsonb NOT NULL, stage text NOT NULL,
         failure_code text, updated_at timestamptz NOT NULL DEFAULT now()
       );
+      CREATE TABLE IF NOT EXISTS reliability.queue_jobs (
+        order_id uuid PRIMARY KEY, request jsonb NOT NULL,
+        state text NOT NULL DEFAULT 'PENDING' CHECK(state IN ('PENDING','PROCESSING','DONE')),
+        attempts integer NOT NULL DEFAULT 0, available_at timestamptz NOT NULL DEFAULT now(),
+        lease_until timestamptz, lease_token uuid, created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS queue_pending ON reliability.queue_jobs(available_at,created_at) WHERE state<>'DONE';
+      CREATE TABLE IF NOT EXISTS reliability.carts (user_id uuid PRIMARY KEY, items jsonb NOT NULL);
     `);
   });
 }
@@ -35,5 +43,6 @@ export async function ensureReliabilitySchema(db: Database): Promise<void> {
 export async function clearReliabilityState(db: Database): Promise<void> {
   await ensureReliabilitySchema(db);
   await db.query('reliability.reset', `TRUNCATE reliability.outbox, reliability.inbox,
-    reliability.payments, reliability.inventory_operations, reliability.rest_sagas`);
+    reliability.payments, reliability.inventory_operations, reliability.rest_sagas,
+    reliability.queue_jobs, reliability.carts`);
 }

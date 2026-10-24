@@ -15,9 +15,16 @@ afterEach(() => {
 });
 
 describe('measurement semantics', () => {
-  it('separates operation throughput, HTTP traffic, primary latency and confirmation evidence', async () => {
+  it.each([
+    { configured: '0.01', expected: 0.01 },
+    { configured: '', expected: 0.01 },
+    { configured: '  ', expected: 0.01 },
+    { configured: undefined, expected: 0.01 },
+    { configured: '0', expected: 0 },
+    { configured: '1', expected: 1 },
+  ])('separates measurement populations with polling configuration "$configured"', async ({ configured, expected }) => {
     vi.stubEnv('K6_TIMESERIES_MODE', 'summary');
-    vi.stubEnv('K6_E2E_POLL_SAMPLE_RATE', '0.01');
+    vi.stubEnv('K6_E2E_POLL_SAMPLE_RATE', configured);
     const outputDir = mkdtempSync(path.join(os.tmpdir(), 'load-measurement-'));
     directories.push(outputDir);
     const summary = { metrics: {
@@ -42,7 +49,34 @@ describe('measurement semantics', () => {
     expect(result.checkoutSampledConfirmationRate).toBe(0.8);
     expect(result.checkoutConfirmationSamples).toBe(10);
     const settings = JSON.parse(readFileSync(path.join(outputDir, 'load-configuration.json'), 'utf8'));
-    expect(settings.e2ePollSampleRate).toBe(0.01);
+    expect(settings.e2ePollSampleRate).toBe(expected);
     expect(settings.timeseries).toBe(false);
+  });
+
+  it('passes an exact operation volume to k6 and preserves raw HTTP request counts', async () => {
+    vi.stubEnv('K6_TIMESERIES_MODE', 'summary');
+    const outputDir = mkdtempSync(path.join(os.tmpdir(), 'load-volume-'));
+    directories.push(outputDir);
+    const summary = { metrics: {
+      operation_latency: { values: { 'p(99)': 75, med: 20 } },
+      iterations: { values: { count: 10_000, rate: 1000 / 60 } },
+      http_reqs: { values: { count: 12_345, rate: 20.575 } },
+      http_req_failed: { values: { rate: 0 } },
+      dropped_iterations: { values: { count: 0 } },
+    } };
+    vi.mocked(execa).mockImplementation((...args: unknown[]) => {
+      const argv = args[1] as string[];
+      writeFileSync(argv[argv.indexOf('--summary-export') + 1]!, JSON.stringify(summary));
+      return Promise.resolve({ exitCode: 0, stderr: '' }) as never;
+    });
+    const result = await new LocalK6Runner().run({ workloadProfile: 'MIXED_V1',
+      targetRps: 1000 / 60, targetOperations: 10_000, durationSeconds: 600,
+      warmupSeconds: 0, cooldownSeconds: 0, sutBaseUrl: 'http://localhost:3000',
+      productIds: ['p'], userIds: ['u'], outputDir }, createTestLogger());
+    expect(result.targetOperations).toBe(10_000);
+    expect(result.totalIterations).toBe(10_000);
+    expect(result.totalRequests).toBe(12_345);
+    const settings = JSON.parse(readFileSync(path.join(outputDir, 'load-configuration.json'), 'utf8'));
+    expect(settings.targetOperations).toBe(10_000);
   });
 });

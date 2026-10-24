@@ -8,6 +8,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
+    "ai:batch": "node --env-file-if-exists=experiments/ai-batch/keys.env --import tsx scripts/ai-batch.ts --config experiments/ai-batch/apikey-fan-6-models.study.json",
+    "ai:batch:apikey-fan": "node --env-file-if-exists=experiments/ai-batch/keys.env --import tsx scripts/ai-batch.ts --config experiments/ai-batch/apikey-fan-6-models.study.json",
     "dev:api": "cross-env APP_ROLE=controller-api tsx watch src/main.ts",
     "dev:worker": "cross-env APP_ROLE=experiment-worker tsx watch src/main.ts",
     "dev:monolith": "cross-env APP_ROLE=sut-monolith tsx watch src/main.ts",
@@ -25,6 +27,8 @@
     "db:sut:migrate": "tsx scripts/migrate-sut.ts",
     "db:sut:seed": "tsx scripts/seed-sut.ts",
     "registry:validate": "tsx scripts/validate-registry.ts",
+    "registry:expand-matrix": "node scripts/expand-architecture-matrix.mjs",
+    "registry:export-ai": "tsx scripts/export-ai-contract.ts",
     "candidate:validate": "tsx scripts/validate-candidate.ts",
     "experiment:smoke": "tsx scripts/run-smoke-experiment.ts",
     "experiment:pilot": "tsx scripts/run-protocol.ts protocols/pilot-v1.yaml",

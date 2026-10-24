@@ -11,6 +11,7 @@ import type { EventEnvelope } from '../../src/sut/shared/events/rabbitmq.js';
 import { replayDeadLetters } from '../../src/sut/shared/events/dead-letter.js';
 import { createOrderModule } from '../../src/sut/monolith/order-module.js';
 import { createPaymentModule } from '../../src/sut/monolith/payment-module.js';
+import { createInventoryModule } from '../../src/sut/monolith/inventory-module.js';
 import { applyInventoryOperation } from '../../src/sut/services/inventory/operations.js';
 import { createRestSaga } from '../../src/sut/services/order/rest-saga.js';
 import { DomainError } from '../../src/sut/shared/errors/domain-errors.js';
@@ -187,6 +188,59 @@ describe('Production reliability against PostgreSQL and RabbitMQ', () => {
     await expect(createPaymentModule(db).charge({ ...payment, amount: '30.00' })).rejects.toMatchObject({ code: 'PAYMENT_ALREADY_PROCESSED' });
   });
 
+  it('replays concurrent synchronous checkouts across replicas and shares the checkout payment', async () => {
+    const key = randomUUID();
+    const before = await stock();
+    const replica = () => {
+      const replicaDb = new Database(pool);
+      return createOrderModule(replicaDb, createInventoryModule(replicaDb), createPaymentModule(replicaDb));
+    };
+    const results = await Promise.all(Array.from({ length: 8 }, () => replica().checkout(key, request)));
+    expect(new Set(results.map(r => r.order.id)).size).toBe(1);
+    expect(results.filter(r => !r.replayed)).toHaveLength(1);
+    expect(await stock()).toEqual({ available_quantity: before.available_quantity - 2, reserved_quantity: before.reserved_quantity });
+    const order = results[0]!.order;
+    const replay = await createPaymentModule(new Database(pool)).charge({ orderId: order.id, amount: order.totalAmount, mode: 'MOCK_SUCCESS' });
+    expect(replay.duplicate).toBe(true);
+    expect((await pool.query('SELECT count(*)::int AS count FROM reliability.payments WHERE order_id=$1', [order.id])).rows[0].count).toBe(1);
+    await replica().cancel(order.id);
+    expect(await stock()).toEqual(before);
+  });
+
+  it('rolls the durable payment back with a failed synchronous checkout transaction', async () => {
+    const key = randomUUID();
+    const before = await stock();
+    const payments = createPaymentModule(db);
+    let chargedOrderId = '';
+    const orders = createOrderModule(db, createInventoryModule(db), {
+      async charge(payment) {
+        chargedOrderId = payment.orderId;
+        await payments.charge(payment);
+        throw new Error('simulated crash before confirmation');
+      },
+    });
+    await expect(orders.checkout(key, request)).rejects.toThrow('simulated crash');
+    expect((await pool.query('SELECT order_id FROM reliability.payments WHERE order_id=$1', [chargedOrderId])).rowCount).toBe(0);
+    expect((await pool.query('SELECT id FROM orders WHERE idempotency_key=$1', [key])).rowCount).toBe(0);
+    expect(await stock()).toEqual(before);
+  });
+
+  it('handles overlapping orders with reversed product order and concurrent cancellations', async () => {
+    const otherProduct = randomUUID();
+    await pool.query("INSERT INTO products(id,sku,name,category,price) VALUES ($1,$2,'Second','test',5)", [otherProduct, otherProduct]);
+    await pool.query('INSERT INTO inventory(product_id,available_quantity) VALUES ($1,100)', [otherProduct]);
+    const before = await stock();
+    const orders = createOrderModule(db, createInventoryModule(db), createPaymentModule(db));
+    const items = [{ productId, quantity: 1 }, { productId: otherProduct, quantity: 1 }];
+    const results = await Promise.all(Array.from({ length: 8 }, (_, i) => orders.checkout(randomUUID(), {
+      ...request, items: i % 2 ? [...items].reverse() : items,
+    })));
+    await Promise.all(results.map(result => orders.cancel(result.order.id)));
+    expect(await stock()).toEqual(before);
+    expect((await pool.query('SELECT available_quantity,reserved_quantity FROM inventory WHERE product_id=$1', [otherProduct])).rows[0])
+      .toEqual({ available_quantity: 100, reserved_quantity: 0 });
+  });
+
   it('replays reserve/commit/release safely and blocks reserve after a release tombstone', async () => {
     const id = randomUUID();
     const before = await stock();
@@ -219,6 +273,36 @@ describe('Production reliability against PostgreSQL and RabbitMQ', () => {
     expect(await stock()).toEqual({ available_quantity: before.available_quantity - 2, reserved_quantity: before.reserved_quantity });
     await restarted.cancel(result.order.id);
     expect(await stock()).toEqual(before);
+  });
+
+  it('waits for a recovery owner instead of returning a spurious 503 on checkout replay', async () => {
+    const before = await stock();
+    let offline = true;
+    let entered!: () => void;
+    let release!: () => void;
+    const reserving = new Promise<void>(resolve => { entered = resolve; });
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    const saga = createRestSaga(db, {
+      payments: createPaymentModule(db),
+      async inventory(action, id, items) {
+        if (action === 'reserve') {
+          if (offline) throw new DomainError('DEPENDENCY_UNAVAILABLE');
+          entered(); await barrier;
+        }
+        await applyInventoryOperation(db, action, id, items);
+      },
+    });
+    const key = randomUUID();
+    await expect(saga.checkout(key, request)).rejects.toMatchObject({ code: 'DEPENDENCY_UNAVAILABLE' });
+    offline = false;
+    const recovery = saga.recover(); await reserving;
+    const replay = saga.checkout(key, request);
+    const assertion = expect(replay).resolves.toMatchObject({ order: { status: 'CONFIRMED' }, replayed: true });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    release(); await recovery; await assertion;
+    const result = await replay;
+    expect(await stock()).toEqual({ available_quantity: before.available_quantity - 2, reserved_quantity: before.reserved_quantity });
+    await saga.cancel(result.order.id); expect(await stock()).toEqual(before);
   });
 
   it('compensates payment decline and resumes a failed release after restart', async () => {

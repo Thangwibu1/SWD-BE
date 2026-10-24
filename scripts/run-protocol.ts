@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import YAML from 'yaml';
 import { loadRegistry } from '../src/evaluator/registry/index.js';
+import { profileCandidate } from '../src/evaluator/registry/ai-contract.js';
 import { validateCandidate } from '../src/evaluator/architecture-validator/index.js';
 import { insertCandidate } from '../src/metadata/repositories/candidates.js';
 import { insertExperiment } from '../src/metadata/repositories/experiments.js';
@@ -73,6 +74,7 @@ for (const job of jobs) {
   const profile = registry.get(job.architectureId);
   if (!profile) throw new Error(`Unknown architecture ${job.architectureId}`);
   const candidate = {
+    ...profileCandidate(profile),
     schemaVersion: '1.0.0', candidateId: `${protocol.version}-${job.architectureId}-${job.workload}`,
     architectureId: job.architectureId, architectureFamily: profile.family,
     priorities: [
@@ -81,11 +83,6 @@ for (const job of jobs) {
       { metric: 'scalability', operator: 'MAX', weight: 0.25 },
     ],
     components: profile.allowedRoles,
-    decisions: {
-      cache: { enabled: profile.cache.enabled, targets: profile.cache.enabled ? ['product', 'cart'] : [], ...(profile.cache.enabled ? { ttlSeconds: 60 } : {}) },
-      messaging: { enabled: profile.messaging.enabled, broker: profile.messaging.broker },
-      scalingProfile: profile.scalingProfile, communication: profile.communication,
-    },
     assumptions: ['Controlled single-host benchmark'], rationale: [`Evaluate fixed profile ${job.architectureId}`],
   };
   const validation = validateCandidate(candidate);

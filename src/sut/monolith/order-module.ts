@@ -101,6 +101,7 @@ async function checkoutInTransaction(
   }
 
   return db.transaction(async (tx) => {
+    await tx.query('order.idempotency.lock', 'SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [idempotencyKey]);
     // Idempotency replay: look up existing order with same key.
     const existing = await tx.query<OrderDbRow & { items_json: string }>(
       'order.idempotency',

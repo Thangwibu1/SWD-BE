@@ -2,14 +2,15 @@ import type { Cart, CartApi, CartLine } from '../shared/domain/types.js';
 import { DomainError } from '../shared/errors/domain-errors.js';
 
 /**
- * Abstract cart store — MemoryCartStore for A01, RedisCartStore for A02+.
- * Cart is NOT one of the 5 SUT business tables; it lives in Redis or memory
- * as specified by the guide (section 6).
+ * Cart is separate from business tables. Runtime stores are shared PostgreSQL
+ * or Redis; memory is retained for isolated module tests.
  */
 export interface CartStore {
   get(userId: string): Promise<CartLine[]>;
   set(userId: string, items: CartLine[]): Promise<void>;
   clear(userId: string): Promise<void>;
+  upsert?(userId: string, productId: string, quantity: number): Promise<CartLine[]>;
+  remove?(userId: string, productId: string): Promise<CartLine[]>;
 }
 
 export class MemoryCartStore implements CartStore {
@@ -39,6 +40,7 @@ export function createCartModule(store: CartStore): CartApi {
     },
 
     async upsert(userId, productId, quantity): Promise<Cart> {
+      if (store.upsert) return { userId, items: await store.upsert(userId, productId, quantity) };
       const items = await store.get(userId);
       const existing = items.find((i) => i.productId === productId);
       if (existing) {
@@ -51,6 +53,7 @@ export function createCartModule(store: CartStore): CartApi {
     },
 
     async remove(userId, productId): Promise<Cart> {
+      if (store.remove) return { userId, items: await store.remove(userId, productId) };
       const items = await store.get(userId);
       const index = items.findIndex((i) => i.productId === productId);
       if (index < 0) throw new DomainError('CART_ITEM_NOT_FOUND');

@@ -16,7 +16,7 @@ export function createInventoryModule(db: Database): InventoryApi & InventoryTxO
     },
 
     async reserveStock(tx, items): Promise<void> {
-      for (const item of items) {
+      for (const item of [...items].sort((a, b) => a.productId.localeCompare(b.productId))) {
         const res = await tx.query<InventoryRow>(
           'inventory.lock',
           `SELECT product_id, available_quantity, reserved_quantity, version
@@ -45,7 +45,7 @@ export function createInventoryModule(db: Database): InventoryApi & InventoryTxO
     },
 
     async releaseStock(tx, items): Promise<void> {
-      for (const item of items) {
+      for (const item of [...items].sort((a, b) => a.productId.localeCompare(b.productId))) {
         await tx.query(
           'inventory.release',
           `UPDATE inventory
@@ -59,7 +59,7 @@ export function createInventoryModule(db: Database): InventoryApi & InventoryTxO
     },
 
     async commitStock(tx, items): Promise<void> {
-      for (const item of items) {
+      for (const item of [...items].sort((a, b) => a.productId.localeCompare(b.productId))) {
         await tx.query(
           'inventory.commit',
           `UPDATE inventory

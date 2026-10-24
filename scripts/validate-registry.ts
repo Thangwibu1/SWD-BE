@@ -3,10 +3,14 @@
  * Validates all architecture-registry/*.yaml files against registry.schema.json
  * and checks resource quota constraints (sum(cpus) <= 2.0, sum(memoryMiB) <= 4096).
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parse as yamlParse } from 'yaml';
 import { Ajv2020 } from 'ajv/dist/2020.js';
+import type { ArchitectureProfile } from '../src/evaluator/registry/index.js';
+import { renderCompose } from '../src/evaluator/compose-renderer/index.js';
+import { auditRenderedProfile } from '../src/evaluator/registry/audit.js';
 
 const REGISTRY_DIR = path.resolve('architecture-registry');
 const SCHEMA_PATH = path.join(REGISTRY_DIR, 'registry.schema.json');
@@ -70,7 +74,23 @@ function main(): void {
         failures += 1;
         continue;
       }
-      console.log(`✅ ${file}: valid (${totalCpus} vCPU, ${totalMemory} MiB)`);
+      const directory = mkdtempSync(path.join(tmpdir(), 'registry-audit-'));
+      try {
+        const profile = content as unknown as ArchitectureProfile;
+        const rendered = renderCompose({ runId: `audit-${profile.id}`, profile,
+          databaseUrl: 'postgres://bench:bench@postgres:5432/ecommerce', hostPortStart: 19000, outputDir: directory });
+        const errors = auditRenderedProfile(profile, rendered.composeContent);
+        if (errors.length) {
+          console.error(`❌ ${file}: deployment audit failed\n${errors.join('\n')}`);
+          failures += 1;
+          continue;
+        }
+      } catch (error) {
+        console.error(`❌ ${file}: ${String(error)}`);
+        failures += 1;
+        continue;
+      } finally { rmSync(directory, { recursive: true, force: true }); }
+      console.log(`✅ ${file}: schema + deployment valid (${totalCpus} vCPU, ${totalMemory} MiB)`);
     } else {
       console.log(`✅ ${file}: valid (no resource profile)`);
     }

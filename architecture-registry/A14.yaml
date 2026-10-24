@@ -1,0 +1,34 @@
+id: A14
+family: MODULAR_MONOLITH
+composeTemplate: infra/sut-templates/pg-queue-a14.compose.yaml
+cache:
+  enabled: false
+  targets: []
+messaging:
+  enabled: true
+  broker: POSTGRES
+scalingProfile: QUEUE_DUAL_API
+communication: POSTGRES_QUEUE
+resourceProfile: pg_queue_a14_v1
+allowedRoles:
+  - api-gateway
+  - sut-monolith
+  - sut-monolith-2
+  - postgres
+  - pg-queue-worker
+resources:
+  app:
+    cpus: 0.1
+    memoryMiB: 192
+  postgres:
+    cpus: 0.8
+    memoryMiB: 1536
+  sut-monolith:
+    cpus: 0.3
+    memoryMiB: 640
+  pg-queue-worker:
+    cpus: 0.3
+    memoryMiB: 384
+  sut-monolith-2:
+    cpus: 0.3
+    memoryMiB: 640

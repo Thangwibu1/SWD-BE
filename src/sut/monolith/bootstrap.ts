@@ -9,29 +9,31 @@ import type { SutApis } from '../shared/domain/types.js';
 import { createAuthModule } from './auth-module.js';
 import { createCatalogModule } from './catalog-module.js';
 import { createInventoryModule } from './inventory-module.js';
-import { createCartModule, MemoryCartStore } from './cart-module.js';
+import { createCartModule } from './cart-module.js';
 import { createOrderModule } from './order-module.js';
 import { createPaymentModule } from './payment-module.js';
 import { NullProductCache } from './product-cache.js';
 import type { ProductCache } from './product-cache.js';
-import type { CartStore } from './cart-module.js';
 import { connectRedis, RedisProductCache, RedisCartStore } from './redis-cache.js';
 import type { RedisClient } from './redis-cache.js';
-
-/** Architectures that enable Redis cache. */
-const REDIS_CACHE_ARCHITECTURES = new Set(['A02', 'A03', 'A04']);
+import { loadRegistry } from '../../evaluator/registry/index.js';
+import { ensureReliabilitySchema } from '../shared/database/reliability.js';
+import { createPgQueueOrders, createPgCart } from './pg-queue.js';
 
 /**
- * Bootstraps the modular monolith SUT (A01–A04).
+ * Bootstraps the modular monolith with capabilities selected from the registry.
  *
  * One Express process with modules communicating via interfaces (guide §10.1).
- * A01: baseline (no cache, in-memory cart).
+ * Carts without Redis use shared PostgreSQL, including across replicas.
  * A02: Redis product/cart cache.
  * A03/A04: handled identically except for replica count (Compose-level).
  */
 export async function bootstrapMonolith(_appConfig: AppConfig, logger: Logger): Promise<void> {
   const config = loadSutConfig();
   const archId = config.ARCHITECTURE_ID;
+  const profile = loadRegistry().get(archId);
+  if (!profile) throw new Error(`Unknown architecture ${archId}`);
+  const pgQueue = profile.messaging.broker === 'POSTGRES';
   logger.info({ architectureId: archId }, 'Bootstrapping monolith');
 
   // PostgreSQL
@@ -41,17 +43,18 @@ export async function bootstrapMonolith(_appConfig: AppConfig, logger: Logger): 
     applicationName: `sut-monolith-${archId}`,
   });
   const db = new Database(pool);
+  await ensureReliabilitySchema(db);
 
   // Redis (optional based on architecture)
   let redis: RedisClient | undefined;
   let productCache: ProductCache = new NullProductCache();
-  let cartStore: CartStore = new MemoryCartStore();
+  let redisCart: RedisCartStore | undefined;
 
-  if (REDIS_CACHE_ARCHITECTURES.has(archId)) {
+  if (profile.cache.enabled) {
     redis = await connectRedis(config.REDIS_URL, logger);
-    productCache = new RedisProductCache(redis);
-    cartStore = new RedisCartStore(redis);
-    logger.info('Redis connected — product cache and cart store active');
+    if (profile.cache.targets?.includes('product')) productCache = new RedisProductCache(redis);
+    if (profile.cache.targets?.includes('cart')) redisCart = new RedisCartStore(redis);
+    logger.info({ targets: profile.cache.targets }, 'Redis cache connected');
   }
 
   // Wire modules
@@ -71,9 +74,9 @@ export async function bootstrapMonolith(_appConfig: AppConfig, logger: Logger): 
   const auth = createAuthModule(db);
   const catalog = createCatalogModule(db, productCache);
   const inventory = createInventoryModule(db);
-  const cart = createCartModule(cartStore);
-  const payments = createPaymentModule();
-  const orders = createOrderModule(db, inventory, payments, sendNotification);
+  const cart = redisCart ? createCartModule(redisCart) : createPgCart(db);
+  const payments = createPaymentModule(db);
+  const orders = pgQueue ? createPgQueueOrders(db) : createOrderModule(db, inventory, payments, sendNotification);
 
   const apis: SutApis = { auth, catalog, inventory, cart, orders, payments };
 

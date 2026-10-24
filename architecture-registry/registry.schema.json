@@ -20,11 +20,15 @@
     "id": {
       "type": "string",
       "pattern": "^A\\d{2}$",
-      "description": "Registry ID A01–A12."
+      "description": "Two-digit registry ID; supported IDs come from architecture-registry/*.yaml."
     },
     "family": {
       "type": "string",
-      "enum": ["MODULAR_MONOLITH", "REST_MICROSERVICES", "EVENT_DRIVEN_MICROSERVICES"]
+      "enum": [
+        "MODULAR_MONOLITH",
+        "REST_MICROSERVICES",
+        "EVENT_DRIVEN_MICROSERVICES"
+      ]
     },
     "composeTemplate": {
       "type": "string",
@@ -33,22 +37,44 @@
     "cache": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled"],
+      "required": [
+        "enabled"
+      ],
       "properties": {
-        "enabled": { "type": "boolean" },
+        "enabled": {
+          "type": "boolean"
+        },
         "targets": {
           "type": "array",
-          "items": { "type": "string", "enum": ["product", "cart"] }
+          "items": {
+            "type": "string",
+            "enum": [
+              "product",
+              "cart"
+            ]
+          }
         }
       }
     },
     "messaging": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "broker"],
+      "required": [
+        "enabled",
+        "broker"
+      ],
       "properties": {
-        "enabled": { "type": "boolean" },
-        "broker": { "type": "string", "enum": ["NONE", "RABBITMQ"] }
+        "enabled": {
+          "type": "boolean"
+        },
+        "broker": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "RABBITMQ",
+            "POSTGRES"
+          ]
+        }
       }
     },
     "scalingProfile": {
@@ -59,12 +85,21 @@
         "ONE_PER_SERVICE",
         "CATALOG_SCALED",
         "ORDER_SCALED",
-        "DUAL_APP_PROXY_ASYNC"
+        "DUAL_APP_PROXY_ASYNC",
+        "QUEUE_SINGLE_API",
+        "QUEUE_DUAL_API",
+        "QUEUE_DUAL_WORKER",
+        "QUEUE_SINGLE_API_DUAL_WORKER"
       ]
     },
     "communication": {
       "type": "string",
-      "enum": ["IN_PROCESS", "HTTP_JSON", "AMQP_EVENT"]
+      "enum": [
+        "IN_PROCESS",
+        "HTTP_JSON",
+        "AMQP_EVENT",
+        "POSTGRES_QUEUE"
+      ]
     },
     "resourceProfile": {
       "type": "string",
@@ -72,7 +107,9 @@
     },
     "allowedRoles": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "minItems": 1,
       "description": "Container roles that may appear in the SUT sandbox."
     },
@@ -81,10 +118,19 @@
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["cpus", "memoryMiB"],
+        "required": [
+          "cpus",
+          "memoryMiB"
+        ],
         "properties": {
-          "cpus": { "type": "number", "minimum": 0.1 },
-          "memoryMiB": { "type": "integer", "minimum": 64 }
+          "cpus": {
+            "type": "number",
+            "minimum": 0.1
+          },
+          "memoryMiB": {
+            "type": "integer",
+            "minimum": 64
+          }
         }
       },
       "description": "CPU/RAM per container. sum(cpus)<=2.0, sum(memoryMiB)<=4096."

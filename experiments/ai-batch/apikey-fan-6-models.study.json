@@ -1,0 +1,68 @@
+{
+  "extends": "study.json",
+  "studyId": "apikey-fan-6-models-6x-volume-v1",
+  "scenarios": [
+    {
+      "id": "ecommerce-volume",
+      "requirements": "Thiết kế backend e-commerce có đăng nhập, duyệt sản phẩm, giỏ hàng, checkout, xem và hủy đơn CONFIRMED. Hãy chọn đúng một kiến trúc trong catalog và giải thích đánh đổi về độ phức tạp vận hành, chi phí, tính nhất quán, khả năng chịu lỗi và mở rộng. Không giả định kiến trúc đạt SLO trước benchmark; cùng lựa chọn sẽ được đo độc lập ở 10.000, 100.000 và 500.000 business operations.",
+      "workloadProfile": "MIXED_V1",
+      "expected": "supported"
+    }
+  ],
+  "models": [
+    {
+      "id": "claude",
+      "provider": "openai",
+      "model": "claude-sonnet-5-5",
+      "apiKeyEnv": "APIKEY_FAN_CLAUDE_KEY",
+      "baseUrl": "https://api.apikey.fan/v1",
+      "maxOutputTokens": 8192,
+      "sendMaxOutputTokens": false
+    },
+    {
+      "id": "codex",
+      "provider": "openai",
+      "model": "gpt-6.1-sol",
+      "apiKeyEnv": "APIKEY_FAN_CODEX_KEY",
+      "baseUrl": "https://api.apikey.fan/v1",
+      "maxOutputTokens": 8192,
+      "sendMaxOutputTokens": false
+    },
+    {
+      "id": "deepseek",
+      "provider": "openai",
+      "model": "deepseek-flash",
+      "apiKeyEnv": "APIKEY_FAN_DEEPSEEK_KEY",
+      "baseUrl": "https://api.apikey.fan/v1",
+      "maxOutputTokens": 8192,
+      "sendMaxOutputTokens": false
+    },
+    {
+      "id": "kimi",
+      "provider": "openai",
+      "model": "kimi-k2.6",
+      "apiKeyEnv": "APIKEY_FAN_KIMI_KEY",
+      "baseUrl": "https://api.apikey.fan/v1",
+      "maxOutputTokens": 8192,
+      "sendMaxOutputTokens": false
+    },
+    {
+      "id": "jev",
+      "provider": "openai",
+      "model": "jev-latest",
+      "apiKeyEnv": "APIKEY_FAN_JEV_KEY",
+      "baseUrl": "https://api.apikey.fan/v1",
+      "maxOutputTokens": 8192,
+      "sendMaxOutputTokens": false
+    },
+    {
+      "id": "glm",
+      "provider": "openai",
+      "model": "glm-5.3-flash",
+      "apiKeyEnv": "APIKEY_FAN_GLM_KEY",
+      "baseUrl": "https://api.apikey.fan/v1",
+      "maxOutputTokens": 8192,
+      "sendMaxOutputTokens": false
+    }
+  ]
+}

@@ -10,6 +10,8 @@ const checkoutAcceptLatency = new Trend('checkout_accept_latency', true);
 const checkoutSuccessRate = new Rate('checkout_acceptance_rate');
 const stockoutRate = new Rate('stockout_rate');
 const BASE_URL = __ENV.SUT_BASE_URL || 'http://localhost:3000';
+const DURATION = __ENV.DURATION || '60s';
+const TARGET_OPERATIONS = parseInt(__ENV.TARGET_OPERATIONS || '0');
 
 export const options = {
   discardResponseBodies: true,
@@ -17,9 +19,9 @@ export const options = {
   scenarios: {
     checkout: {
       executor: 'constant-arrival-rate',
-      rate: parseInt(__ENV.TARGET_RPS || '25'),
-      timeUnit: '1s',
-      duration: __ENV.DURATION || '60s',
+      rate: TARGET_OPERATIONS || parseInt(__ENV.TARGET_RPS || '25'),
+      timeUnit: TARGET_OPERATIONS ? DURATION : '1s',
+      duration: DURATION,
       preAllocatedVUs: parseInt(__ENV.PRE_ALLOCATED_VUS || '50'),
       maxVUs: parseInt(__ENV.MAX_VUS || '200'),
     },

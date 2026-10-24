@@ -15,7 +15,8 @@ import {
 const experimentOptionsSchema = z.object({
   name: z.string().min(1).max(160).optional(),
   workloadProfile: z.enum(['BROWSING_V1', 'MIXED_V1', 'CHECKOUT_V1', 'FLASH_SALE_V1']).default('MIXED_V1'),
-  loadLevelsRps: z.array(z.number().int().min(1).max(10_000)).min(1).max(10).default([25]),
+  loadLevelsRps: z.array(z.number().int().min(1).max(10_000)).min(1).max(10).optional(),
+  requestVolumes: z.array(z.number().int().min(1).max(10_000_000)).min(1).max(10).optional(),
   warmupSeconds: z.number().int().min(0).max(3600).default(120),
   measureSeconds: z.number().int().min(1).max(86_400).default(600),
   cooldownSeconds: z.number().int().min(0).max(3600).default(60),
@@ -30,7 +31,12 @@ const experimentOptionsSchema = z.object({
   }).default({ p99Ms: 100, errorRateMax: 0.01, consistencyViolationsMax: 0 }),
   costCatalogVersion: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/i).default('research-v1'),
   scoreBoundsVersion: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/i).default('development-v1'),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  if (value.loadLevelsRps && value.requestVolumes)
+    ctx.addIssue({ code: 'custom', message: 'Use either loadLevelsRps or requestVolumes, not both' });
+  if (value.requestVolumes && new Set(value.requestVolumes).size !== value.requestVolumes.length)
+    ctx.addIssue({ code: 'custom', message: 'Duplicate request volumes' });
+});
 
 const createExperimentSchema = experimentOptionsSchema.extend({
   candidate: z.record(z.string(), z.unknown()),
@@ -100,7 +106,9 @@ export function createExperimentController(req: Request, res: Response): void {
       name: body.name ?? `Experiment ${new Date().toISOString()}`,
       candidateId,
       workloadProfile: body.workloadProfile,
-      loadLevelsRps: body.loadLevelsRps,
+      ...(body.requestVolumes
+        ? { requestVolumes: body.requestVolumes }
+        : { loadLevelsRps: body.loadLevelsRps ?? [25] }),
       slo: body.slo,
       costCatalogVersion: body.costCatalogVersion,
       scoreBoundsVersion: body.scoreBoundsVersion,
@@ -164,8 +172,8 @@ export function createArchitectureExperimentController(req: Request, res: Respon
       ],
       components: profile.allowedRoles,
       decisions: {
-        cache: { enabled: profile.cache.enabled, targets: profile.cache.enabled ? ['product', 'cart'] : [],
-          ...(profile.cache.enabled ? { ttlSeconds: 60 } : {}) },
+        cache: { enabled: profile.cache.enabled, targets: profile.cache.targets ?? [],
+          ...(profile.cache.targets?.includes('product') ? { ttlSeconds: 60 } : {}) },
         messaging: profile.messaging,
         scalingProfile: profile.scalingProfile,
         communication: profile.communication,
@@ -178,8 +186,11 @@ export function createArchitectureExperimentController(req: Request, res: Respon
     const candidateId = insertCandidate({ candidateId: candidate.candidateId, modelName: 'direct-selection',
       promptId: 'registry-direct-v1', rawJson: JSON.stringify(candidate), normalizedJson: JSON.stringify(candidate),
       validationStatus: 'VALID', architectureId: id });
-    const { protocolVersion, ...options } = parsed.data;
-    const experimentId = insertExperiment({ ...options, ...(protocolVersion ? { protocolVersion } : {}), name: parsed.data.name ?? `${id} direct stress test`,
+    const { protocolVersion, loadLevelsRps, requestVolumes, ...options } = parsed.data;
+    const loadConfiguration = requestVolumes
+      ? { requestVolumes }
+      : { loadLevelsRps: loadLevelsRps ?? [25] };
+    const experimentId = insertExperiment({ ...options, ...loadConfiguration, ...(protocolVersion ? { protocolVersion } : {}), name: parsed.data.name ?? `${id} direct stress test`,
       candidateId, idempotencyKey });
     res.status(202).json({ experimentId, candidateId, status: 'PENDING', architectureId: id,
       message: 'Architecture stress test created and queued', requestId: req.requestId });
@@ -217,7 +228,7 @@ export function listExperimentsController(req: Request, res: Response): void {
     limit: z.coerce.number().int().min(1).max(100).default(50),
     offset: z.coerce.number().int().min(0).default(0),
     status: z.string().max(32).optional(),
-    architectureId: z.string().regex(/^A(?:0[1-9]|1[0-2])$/).optional(),
+    architectureId: z.string().regex(/^A\d{2}$/).optional(),
     workloadProfile: z.enum(['BROWSING_V1', 'MIXED_V1', 'CHECKOUT_V1', 'FLASH_SALE_V1']).optional(),
     modelName: z.string().max(120).optional(),
     search: z.string().max(160).optional(),
@@ -231,7 +242,7 @@ export function listExperimentsController(req: Request, res: Response): void {
     return;
   }
   const { limit, offset } = parsed.data;
-  const filterOpts: Parameters<typeof listExperiments>[0] = {};
+  const filterOpts: Parameters<typeof listExperiments>[0] = { limit, offset };
   if (parsed.data.status) filterOpts.status = parsed.data.status;
   if (parsed.data.architectureId) filterOpts.architectureId = parsed.data.architectureId;
   if (parsed.data.workloadProfile) filterOpts.workloadProfile = parsed.data.workloadProfile;
@@ -308,6 +319,7 @@ export function getExperimentResultsController(req: Request, res: Response): voi
       runId: r.id,
       runNumber: r.run_number,
       loadRps: r.load_rps,
+      targetOperations: r.target_operations,
       metrics: r.metrics_json ? JSON.parse(r.metrics_json) : null,
       cost: r.cost_json ? JSON.parse(r.cost_json) : null,
       gates: r.gates_json ? JSON.parse(r.gates_json) : null,

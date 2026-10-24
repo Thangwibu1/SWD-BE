@@ -6,6 +6,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { URL } from 'node:url';
 import type { Request, Response } from 'express';
+import { loadRegistry } from '../../evaluator/registry/index.js';
 
 export async function bootstrapGateway(_appConfig: AppConfig, logger: Logger): Promise<void> {
   const config = loadSutConfig();
@@ -14,7 +15,9 @@ export async function bootstrapGateway(_appConfig: AppConfig, logger: Logger): P
 
   const app = createSutApp(logger);
 
-  const isMicroservices = archId >= 'A05' && archId <= 'A12';
+  const profile = loadRegistry().get(archId);
+  if (!profile) throw new Error(`Unknown architecture ${archId}`);
+  const isMicroservices = profile.family !== 'MODULAR_MONOLITH';
 
   let targets: string[] = [];
   const microserviceTargets: { user: string[]; catalog: string[]; inventory: string[]; order: string[]; payment: string[] } = {
@@ -94,20 +97,10 @@ export async function bootstrapGateway(_appConfig: AppConfig, logger: Logger): P
         currentMicroserviceIndex.order = (currentMicroserviceIndex.order + 1) % microserviceTargets.order.length;
       }
     } else {
-      const paymentOrderId = req.originalUrl.startsWith('/payments/') && typeof req.body?.orderId === 'string'
-        ? req.body.orderId as string
-        : undefined;
-      if (paymentOrderId && targets.length > 1) {
-        // The monolith payment mock intentionally keeps its idempotency state
-        // in-process. Route all replays for one order to the same replica so a
-        // scaled A03/A04 deployment preserves the single-payment contract.
-        let hash = 0;
-        for (const character of paymentOrderId) hash = ((hash * 31) + character.charCodeAt(0)) >>> 0;
-        targetUrlString = targets[hash % targets.length]!;
-      } else {
-        targetUrlString = targets[currentTargetIndex]!;
-        currentTargetIndex = (currentTargetIndex + 1) % targets.length;
-      }
+      // Payment and cart state are shared through PostgreSQL or Redis, so
+      // retries remain safe when round-robin selects a different process.
+      targetUrlString = targets[currentTargetIndex]!;
+      currentTargetIndex = (currentTargetIndex + 1) % targets.length;
     }
 
     const targetUrl = new URL(req.originalUrl, targetUrlString);

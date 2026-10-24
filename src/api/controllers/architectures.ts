@@ -2,6 +2,11 @@ import type { Request, Response } from 'express';
 import { loadRegistry } from '../../evaluator/registry/index.js';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
+import { createAiContract } from '../../evaluator/registry/ai-contract.js';
+
+export function aiContractController(_req: Request, res: Response): void {
+  res.json(createAiContract());
+}
 
 export function listArchitecturesController(_req: Request, res: Response): void {
   try {

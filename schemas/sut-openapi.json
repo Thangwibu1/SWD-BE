@@ -3,7 +3,7 @@
   "info": {
     "title": "E-commerce SUT API",
     "version": "1.0.0",
-    "description": "Business contract every architecture profile (A01-A12) must implement identically. Monolith/REST checkout returns 201; event-driven returns 202 and completes asynchronously."
+    "description": "Business contract shared by all registered profiles. Synchronous checkout returns 201; queued checkout returns 202 and must be polled."
   },
   "components": {
     "parameters": {

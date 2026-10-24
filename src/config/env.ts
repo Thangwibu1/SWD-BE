@@ -12,6 +12,7 @@ export const APP_ROLES = [
   'payment-mock',
   'notification-mock',
   'event-worker',
+  'pg-queue-worker',
 ] as const;
 
 export type AppRole = (typeof APP_ROLES)[number];

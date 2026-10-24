@@ -12,7 +12,44 @@ to 10,000 operations/second. Submit to a Docker deployment with
 `EVALUATOR_API_URL=http://localhost:8088 npm run experiment:capacity` after
 generating and packaging the capacity snapshot. This queues discovery runs;
 publication runs require frozen catalogs, repeated measurements and documented
-hardware. The evaluator currently executes the 12 registered profiles.
+hardware. The evaluator supports 52 registered profiles (A01–A52): 13 executable
+topologies with four Redis modes each (none, product, cart, product + cart).
+
+## Ask another AI for a runnable architecture
+
+For bulk model/prompt testing, see the [Vietnamese AI batch runbook](docs/ai-batch.vi.md).
+`npm run ai:batch -- prepare` exports 12 frozen prompts and a 108-generation plan
+for OpenAI, Claude and Gemini; the runner validates responses, resumes generation,
+submits valid selections idempotently, and exports generation/run CSV evidence.
+
+Open `/architectures` in the UI and download **AI prompt** and **JSON schema**.
+Replace the requirements placeholder in the prompt, send it to your AI, then paste
+the returned candidate JSON into a new experiment. The runtime API
+`GET /api/v1/architectures/ai-contract` generates the contract from the registry.
+For local files, run `npm run registry:export-ai`; see [the Vietnamese prompt](docs/ai-contract/prompt.vi.txt).
+
+A13–A16 add a PostgreSQL job queue, durable mock payments, shared PostgreSQL carts,
+one/two API replicas and one/two workers. A15/A16 cache products in Redis.
+The validator rejects mismatched roles, messaging, cache targets and unsupported
+TTL values before executing. These are fixed benchmark topologies: accepting a
+candidate does not guarantee a workload's latency SLO or support arbitrary designs.
+See [supported architecture guide](docs/supported-architectures.md) for the Vietnamese workflow and queue semantics.
+See the [complete matrix](docs/architecture-matrix.md) for each Redis variant and
+the [AI response schema](docs/ai-contract/ai-selection.schema.json) for supported
+candidates or explicit unsupported-requirement errors. Existing pilot/main/capacity
+protocols retain their original 12-profile cohort; supply the desired architecture
+IDs in a separate protocol for a new study. The registry smoke script runs all
+currently registered profiles by default.
+
+See the [full catalog audit (06/10/2026)](docs/architecture-audit-20261006.md)
+for deployment checks, payment/idempotency fixes, runtime evidence and research limits.
+The [16/10/2026 runtime verification](docs/architecture-runtime-verification-20261016.md)
+confirms all 52 profiles have a completed smoke with seven passing business invariants
+and zero HTTP errors; original invalid measurements and all rechecks remain archived.
+See the [runtime measurement fixes](docs/architecture-runtime-fixes-20261016.md)
+for the versioned 5s resource sampler, timing validity, pagination correction and post-fix regression evidence.
+Smoke completion does not establish production SLO or capacity.
+All monolith profiles now share durable mock payment state through PostgreSQL.
 
 ## Requirements
 
@@ -66,7 +103,7 @@ envelope `{code,message,details,requestId}` and required headers (`X-Request-Id`
 
 `controller-api`, `experiment-worker`, `sut-monolith`, `api-gateway`, `user-service`,
 `catalog-service`, `inventory-service`, `order-service`, `payment-mock`,
-`notification-mock`, `event-worker`. `src/main.ts` dispatches on `APP_ROLE`; an
+`notification-mock`, `event-worker`, `pg-queue-worker`. `src/main.ts` dispatches on `APP_ROLE`; an
 unregistered role exits with code 1.
 
 ## Docker image
@@ -107,6 +144,11 @@ replace the development cost catalog with a dated regional catalog. See
 
 ## Deploy the complete UI + evaluator
 
+On Windows, with Docker Desktop running and both repositories checked out as
+siblings, run `./scripts/start-local.ps1`. It creates local `deploy.env` defaults
+if missing, builds both images and starts the stack at `http://localhost:8088`.
+Use `-SkipBuild` when the configured images are already available.
+
 The production Compose topology keeps the controller API away from the Docker
 socket and gives orchestration access only to the worker. Build both independent
 repositories, copy `infra/deploy/deploy.env.example`, and start
@@ -114,13 +156,13 @@ repositories, copy `infra/deploy/deploy.env.example`, and start
 fresh-machine runbook, dataset preparation, digest pinning, health checks,
 security boundary, backup and rollback.
 
-After deployment, open `/architectures`. Every registry card A01–A12 has a
+After deployment, open `/architectures`. Every supported registry card has a
 **Stress test** action. It creates a candidate from the immutable registry on the
 backend, validates it through the same schema/semantic path, then runs the normal
 worker pipeline. AI-generated Candidate JSON remains available from
 `/experiments/new`; it is not required for direct architecture testing.
 
-## Backend-only Docker smoke test (A01-A12)
+## Backend-only Docker smoke test (all supported profiles)
 
 Build the backend image, then start only the API, experiment worker and
 observation services. The override publishes the API on loopback port 4100 by
@@ -139,11 +181,14 @@ Invoke-RestMethod http://localhost:4100/api/v1/ready
 ./scripts/smoke-all-architectures.ps1
 ```
 
-The helper queues one short, 1 RPS `MIXED_V1` pilot experiment for every immutable
-registry profile A01-A12 and waits for all results. Its 1-second warm-up and
-10-second measurement window verify deployability and execution only; they are
+The helper queues one 1 RPS `MIXED_V1` pilot experiment for every immutable
+supported registry profile and waits for all results. Its 10-second warm-up and
+120-second measurement window verify deployability and execution only; they are
 not valid performance evidence. Use the frozen pilot/main protocols for
 statistical comparison.
+The all-profile wait defaults to four hours. Short 10–20 second windows can fail
+the unchanged 95% resource-sample coverage gate on Docker Desktop; retain those
+invalid attempts and recheck with a longer window instead of relaxing the gate.
 
 Rebuild a report deterministically from one archived run:
 

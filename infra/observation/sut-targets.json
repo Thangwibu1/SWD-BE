@@ -1,7 +1,7 @@
 [
   {
     "targets": [
-      "sut-db74efbd-2b8f-4b87-a140-4ac26a83fee4:3000"
+      "sut-882b2d8b-4aa2-4a77-a1e4-d4ec76ef790d:3000"
     ],
     "labels": {
       "job": "sut-services"

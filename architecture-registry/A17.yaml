@@ -1,0 +1,27 @@
+id: A17
+family: MODULAR_MONOLITH
+composeTemplate: infra/sut-templates/matrix-a17.compose.yaml
+cache:
+  enabled: true
+  targets:
+    - product
+messaging:
+  enabled: false
+  broker: NONE
+scalingProfile: SINGLE_INSTANCE
+communication: IN_PROCESS
+resourceProfile: matrix_a17_v1
+allowedRoles:
+  - sut-monolith
+  - postgres
+  - redis
+resources:
+  sut-monolith:
+    cpus: 1
+    memoryMiB: 1792
+  postgres:
+    cpus: 0.5
+    memoryMiB: 1536
+  redis:
+    cpus: 0.5
+    memoryMiB: 768

@@ -7,6 +7,8 @@ import type { Logger } from '../../utils/logger.js';
 export interface LoadRunnerConfig {
   workloadProfile: string;
   targetRps: number;
+  /** Exact business-operation volume scheduled across durationSeconds. */
+  targetOperations?: number;
   durationSeconds: number;
   warmupSeconds: number;
   cooldownSeconds: number;
@@ -23,6 +25,7 @@ export interface LoadRunnerResult {
   droppedIterations: number;
   totalIterations: number;
   totalRequests: number;
+  targetOperations: number | null;
   httpReqDuration: {
     p50: number;
     p95: number;
@@ -91,6 +94,7 @@ export class SshK6Runner implements K6Runner {
     const includeTimeseries = shouldWriteTimeseries(config.targetRps);
     const env = {
       SUT_BASE_URL: remoteSutBaseUrl(config.sutBaseUrl), TARGET_RPS: String(config.targetRps), DURATION: `${config.durationSeconds}s`,
+      ...(config.targetOperations === undefined ? {} : { TARGET_OPERATIONS: String(config.targetOperations) }),
       PRE_ALLOCATED_VUS: String(vus.preAllocated), MAX_VUS: String(vus.max),
       E2E_POLL_SAMPLE_RATE: String(e2ePollSampleRate(config.targetRps)),
       PRODUCT_IDS: JSON.stringify(config.productIds), USER_IDS: JSON.stringify(config.userIds),
@@ -114,7 +118,7 @@ export class SshK6Runner implements K6Runner {
       if (remote.exitCode !== 0 && remote.exitCode !== 99) {
         throw new Error(`Remote k6 exited with ${remote.exitCode}: ${remote.stderr.slice(0, 2000)}`);
       }
-      return parseSummary(summaryPath, actualDurationSeconds, remote.exitCode ?? 0, logger, cpuPercent(cpuBefore, cpuAfter));
+      return parseSummary(summaryPath, actualDurationSeconds, remote.exitCode ?? 0, logger, cpuPercent(cpuBefore, cpuAfter), config.targetOperations);
     } finally {
       await execa('ssh', [...ssh, host, `rm -rf -- ${quote(remoteDir)}`], { reject: false, timeout: 15_000 }).catch((error) => {
         logger.warn({ error, remoteDir }, 'Remote artifact cleanup failed');
@@ -164,6 +168,7 @@ async function runLocalK6Load(
     SUT_BASE_URL: config.sutBaseUrl,
     TARGET_RPS: String(config.targetRps),
     DURATION: `${config.durationSeconds}s`,
+    ...(config.targetOperations === undefined ? {} : { TARGET_OPERATIONS: String(config.targetOperations) }),
     PRE_ALLOCATED_VUS: String(vus.preAllocated),
     MAX_VUS: String(vus.max),
     E2E_POLL_SAMPLE_RATE: String(e2ePollSampleRate(config.targetRps)),
@@ -275,6 +280,7 @@ async function runLocalK6Load(
         droppedIterations: droppedCount,
         totalIterations,
         totalRequests,
+        targetOperations: config.targetOperations ?? null,
         httpReqDuration: { p50, p95, p99, avg, max },
         httpReqFailed: failRate,
         errorBreakdown: {
@@ -311,7 +317,7 @@ function maxArtifactFileBytes(): number {
   return value;
 }
 
-function parseSummary(summaryPath: string, actualDurationSeconds: number, exitCode: number, logger: Logger, loadHostCpuPercent: number): LoadRunnerResult {
+function parseSummary(summaryPath: string, actualDurationSeconds: number, exitCode: number, logger: Logger, loadHostCpuPercent: number, targetOperations?: number): LoadRunnerResult {
   const summary = JSON.parse(readFileSync(summaryPath, 'utf8')) as { metrics?: Record<string, { values?: Record<string, number>; [key: string]: unknown }> };
   const metric = (name: string): Record<string, number> => {
     const raw = summary.metrics?.[name] ?? {};
@@ -332,6 +338,7 @@ function parseSummary(summaryPath: string, actualDurationSeconds: number, exitCo
     droppedIterations: dropped['count'] ?? 0,
     totalIterations: iterations['count'] ?? 0,
     totalRequests: requests['count'] ?? 0,
+    targetOperations: targetOperations ?? null,
     httpReqDuration: { p50: duration['p(50)'] ?? duration['med'] ?? 0, p95: duration['p(95)'] ?? 0,
       p99: duration['p(99)'] ?? 0, avg: duration['avg'] ?? 0, max: duration['max'] ?? 0 },
     httpReqFailed: failed['rate'] ?? failed['value'] ?? 0,
@@ -396,7 +403,7 @@ function shouldWriteTimeseries(targetRps: number): boolean {
 
 function e2ePollSampleRate(_targetRps: number): number {
   const configured = process.env['K6_E2E_POLL_SAMPLE_RATE'];
-  if (configured !== undefined) {
+  if (configured !== undefined && configured.trim() !== '') {
     const value = numericEnv('K6_E2E_POLL_SAMPLE_RATE', 0.01, 0);
     if (value > 1) throw new Error('K6_E2E_POLL_SAMPLE_RATE must not exceed 1');
     return value;
@@ -408,7 +415,9 @@ function e2ePollSampleRate(_targetRps: number): number {
 function writeLoadConfiguration(config: LoadRunnerConfig, env: Record<string, string>, timeseries: boolean, mode: string): void {
   writeFileSync(path.join(config.outputDir, 'load-configuration.json'), JSON.stringify({
     measurementSchemaVersion: '2.0.0',
-    mode, offeredOperationsPerSecond: config.targetRps, scheduledDurationSeconds: config.durationSeconds,
+    mode, offeredOperationsPerSecond: config.targetRps,
+    targetOperations: config.targetOperations ?? null,
+    scheduledDurationSeconds: config.durationSeconds,
     sutBaseUrl: env['SUT_BASE_URL'], workload: config.workloadProfile,
     preAllocatedVUs: Number(env['PRE_ALLOCATED_VUS']), maxVUs: Number(env['MAX_VUS']),
     e2ePollSampleRate: Number(env['E2E_POLL_SAMPLE_RATE']), timeseries,

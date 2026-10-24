@@ -89,6 +89,10 @@ const BOOTSTRAPS: Partial<Record<AppRole, Bootstrap>> = {
   'order-service': bootstrapOrderService,
   'payment-mock': bootstrapPaymentMock,
   'event-worker': bootstrapEventWorker,
+  'pg-queue-worker': async (config, logger) => {
+    const { bootstrapPgQueueWorker } = await import('./sut/services/pg-queue-worker/bootstrap.js');
+    await bootstrapPgQueueWorker(config, logger);
+  },
 };
 
 export async function main(): Promise<void> {

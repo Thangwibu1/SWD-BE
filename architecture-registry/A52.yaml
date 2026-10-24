@@ -1,0 +1,40 @@
+id: A52
+family: MODULAR_MONOLITH
+composeTemplate: infra/sut-templates/matrix-a52.compose.yaml
+cache:
+  enabled: true
+  targets:
+    - product
+    - cart
+messaging:
+  enabled: true
+  broker: POSTGRES
+scalingProfile: QUEUE_SINGLE_API_DUAL_WORKER
+communication: POSTGRES_QUEUE
+resourceProfile: matrix_a52_v1
+allowedRoles:
+  - api-gateway
+  - sut-monolith
+  - postgres
+  - redis
+  - pg-queue-worker
+  - pg-queue-worker-2
+resources:
+  app:
+    cpus: 0.1
+    memoryMiB: 192
+  postgres:
+    cpus: 0.8
+    memoryMiB: 1536
+  sut-monolith:
+    cpus: 0.6
+    memoryMiB: 1280
+  pg-queue-worker:
+    cpus: 0.2
+    memoryMiB: 384
+  redis:
+    cpus: 0.1
+    memoryMiB: 128
+  pg-queue-worker-2:
+    cpus: 0.2
+    memoryMiB: 384

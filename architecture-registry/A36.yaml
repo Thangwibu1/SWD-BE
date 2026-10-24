@@ -1,0 +1,63 @@
+id: A36
+family: EVENT_DRIVEN_MICROSERVICES
+composeTemplate: infra/sut-templates/matrix-a36.compose.yaml
+cache:
+  enabled: true
+  targets:
+    - product
+messaging:
+  enabled: true
+  broker: RABBITMQ
+scalingProfile: CATALOG_SCALED
+communication: AMQP_EVENT
+resourceProfile: matrix_a36_v1
+allowedRoles:
+  - api-gateway
+  - user-service
+  - catalog-service-1
+  - catalog-service-2
+  - inventory-service
+  - order-service
+  - event-worker
+  - payment-mock
+  - notification-mock
+  - postgres
+  - rabbitmq
+  - redis
+resources:
+  api-gateway:
+    cpus: 0.1
+    memoryMiB: 256
+  user-service:
+    cpus: 0.1
+    memoryMiB: 192
+  catalog-service-1:
+    cpus: 0.1
+    memoryMiB: 192
+  catalog-service-2:
+    cpus: 0.1
+    memoryMiB: 192
+  inventory-service:
+    cpus: 0.1
+    memoryMiB: 256
+  order-service:
+    cpus: 0.1
+    memoryMiB: 256
+  event-worker:
+    cpus: 0.1
+    memoryMiB: 256
+  payment-mock:
+    cpus: 0.1
+    memoryMiB: 192
+  notification-mock:
+    cpus: 0.1
+    memoryMiB: 128
+  postgres:
+    cpus: 0.8
+    memoryMiB: 1536
+  rabbitmq:
+    cpus: 0.2
+    memoryMiB: 512
+  redis:
+    cpus: 0.1
+    memoryMiB: 128

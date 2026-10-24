@@ -1,10 +1,35 @@
 import { Router } from 'express';
-import { validateCandidateController, getCandidateController, listCandidatesController } from '../controllers/candidates.js';
-import { createArchitectureExperimentController, createExperimentController, getExperimentController, listExperimentsController, getExperimentResultsController, cancelExperimentController } from '../controllers/experiments.js';
-import { listArchitecturesController, getArchitectureController, listWorkloadsController, listCostCatalogsController } from '../controllers/architectures.js';
+import {
+  validateCandidateController,
+  getCandidateController,
+  listCandidatesController,
+} from '../controllers/candidates.js';
+import {
+  createArchitectureExperimentController,
+  createExperimentController,
+  getExperimentController,
+  listExperimentsController,
+  getExperimentResultsController,
+  cancelExperimentController,
+} from '../controllers/experiments.js';
+import {
+  aiContractController,
+  listArchitecturesController,
+  getArchitectureController,
+  listWorkloadsController,
+  listCostCatalogsController,
+} from '../controllers/architectures.js';
 import { sseEventsHandler } from '../sse/events.js';
-import { downloadArtifactController, listExperimentArtifactsController } from '../controllers/artifacts.js';
+import {
+  downloadArtifactController,
+  listExperimentArtifactsController,
+} from '../controllers/artifacts.js';
 import { compareExperimentsController } from '../controllers/comparisons.js';
+import {
+  getAiBatchStudyController,
+  listAiBatchStudiesController,
+  publishAiBatchStudyController,
+} from '../controllers/ai-batch-results.js';
 
 export function createV1Router(): Router {
   const router = Router();
@@ -22,11 +47,20 @@ export function createV1Router(): Router {
   router.get('/experiments/:id/events', sseEventsHandler);
   router.get('/experiments/:id/artifacts', listExperimentArtifactsController);
   router.post('/experiments/:id/cancel', cancelExperimentController);
-  router.get('/experiments/:experimentId/artifacts/:artifactId/download', downloadArtifactController);
+  router.get(
+    '/experiments/:experimentId/artifacts/:artifactId/download',
+    downloadArtifactController,
+  );
   router.post('/comparisons', compareExperimentsController);
+
+  // AI model campaigns (read-only evidence views)
+  router.get('/ai-batch/studies', listAiBatchStudiesController);
+  router.post('/ai-batch/studies/:studyId/snapshot', publishAiBatchStudyController);
+  router.get('/ai-batch/studies/:studyId', getAiBatchStudyController);
 
   // Architectures
   router.get('/architectures', listArchitecturesController);
+  router.get('/architectures/ai-contract', aiContractController);
   router.get('/architectures/:id', getArchitectureController);
   router.post('/architectures/:id/experiments', createArchitectureExperimentController);
 

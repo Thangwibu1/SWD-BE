@@ -25,6 +25,24 @@ export interface ContainerStatsSample {
   containers: ContainerStats[];
 }
 
+// A fresh docker stats --no-stream call needs two CPU snapshots plus CLI overhead.
+// Keep the planned cadence above that latency, and freeze it in run metadata.
+export const CONTAINER_STATS_INTERVAL_MS = 5000;
+export const RESOURCE_MEASUREMENT_VERSION = '2.0.0';
+
+export function containerStatsCoverage(samples: ContainerStatsSample[], startedAt: Date, durationSeconds: number): number {
+  const expected = Math.max(1, Math.floor(durationSeconds * 1000 / CONTAINER_STATS_INTERVAL_MS));
+  const buckets = new Set<number>();
+  for (const sample of samples) {
+    const elapsed = Date.parse(sample.collectedAt) - startedAt.getTime();
+    const bucket = Math.floor(elapsed / CONTAINER_STATS_INTERVAL_MS);
+    if (elapsed >= 0 && elapsed < durationSeconds * 1000 && bucket < expected && sample.containers.length > 0) {
+      buckets.add(bucket);
+    }
+  }
+  return buckets.size / expected * 100;
+}
+
 export function configurePrometheusSutTarget(hostPort: number, host = 'host.docker.internal'): void {
   if (!Number.isInteger(hostPort) || hostPort < 1 || hostPort > 65535) throw new Error(`Invalid Prometheus SUT port ${hostPort}`);
   if (!/^[A-Za-z0-9.-]+$/.test(host)) throw new Error(`Invalid Prometheus SUT host ${host}`);
@@ -36,13 +54,13 @@ export async function collectContainerStatsSeries(
   projectName: string,
   signal: AbortSignal,
   logger: Logger,
-  intervalMs = 2000,
+  intervalMs = CONTAINER_STATS_INTERVAL_MS,
 ): Promise<ContainerStatsSample[]> {
   const samples: ContainerStatsSample[] = [];
   while (!signal.aborted) {
     const iterationStartedAt = Date.now();
     const containers = await collectContainerStats(projectName, logger);
-    if (containers.length > 0) samples.push({ collectedAt: new Date().toISOString(), containers });
+    if (!signal.aborted && containers.length > 0) samples.push({ collectedAt: new Date().toISOString(), containers });
     const waitMs = Math.max(0, intervalMs - (Date.now() - iterationStartedAt));
     if (signal.aborted || waitMs === 0) continue;
     await new Promise<void>((resolve) => {

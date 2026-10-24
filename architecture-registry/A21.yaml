@@ -1,0 +1,34 @@
+id: A21
+family: MODULAR_MONOLITH
+composeTemplate: infra/sut-templates/matrix-a21.compose.yaml
+cache:
+  enabled: true
+  targets:
+    - cart
+messaging:
+  enabled: false
+  broker: NONE
+scalingProfile: DUAL_APP_PROXY
+communication: IN_PROCESS
+resourceProfile: matrix_a21_v1
+allowedRoles:
+  - api-gateway
+  - sut-monolith
+  - postgres
+  - redis
+resources:
+  api-gateway:
+    cpus: 0.2
+    memoryMiB: 256
+  sut-monolith:
+    cpus: 0.5
+    memoryMiB: 896
+  sut-monolith-2:
+    cpus: 0.5
+    memoryMiB: 896
+  postgres:
+    cpus: 0.5
+    memoryMiB: 1280
+  redis:
+    cpus: 0.3
+    memoryMiB: 768

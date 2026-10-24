@@ -101,6 +101,25 @@ describe('Golden Tests - Evaluator Engines', () => {
       expect(gates.allPassed).toBe(false);
       expect(gates.feasible).toBe(false);
     });
+
+    it('requires the complete requested business-operation volume', () => {
+      const common: MetricValues = {
+        p99Ms: 80, errorRate: 0, droppedIterations: 0, consistencyViolations: 0,
+        oomKills: 0, unexpectedCrashes: 0, measurementDurationSeconds: 600,
+        sampleCount: 9999, metricCoveragePercent: 100, loadHostCpuPercent: 10,
+        offeredRps: 10_000 / 600, achievedOperationRps: 9999 / 600,
+        targetOperations: 10_000, completedOperations: 9999,
+      };
+      const slo = { p99Ms: 100, errorRateMax: 0.01, consistencyViolationsMax: 0 };
+      const failed = checkGates(common, slo, logger);
+      expect(failed.gates.find((gate) => gate.code === 'GATE_OPERATION_VOLUME')).toMatchObject({
+        passed: false, observed: 9999, threshold: 10_000,
+      });
+      const passed = checkGates({ ...common, sampleCount: 10_000,
+        achievedOperationRps: 10_000 / 600, completedOperations: 10_000 }, slo, logger);
+      expect(passed.gates.find((gate) => gate.code === 'GATE_OPERATION_VOLUME')?.passed).toBe(true);
+      expect(passed.allPassed).toBe(true);
+    });
   });
 
 

@@ -4,17 +4,43 @@
   "architectureId": "A01",
   "architectureFamily": "MODULAR_MONOLITH",
   "priorities": [
-    { "metric": "p99_ms", "operator": "LTE", "target": 100, "weight": 0.45 },
-    { "metric": "monthly_cost_usd", "operator": "MIN", "weight": 0.30 },
-    { "metric": "scalability", "operator": "MAX", "weight": 0.25 }
+    {
+      "metric": "p99_ms",
+      "operator": "LTE",
+      "target": 100,
+      "weight": 0.45
+    },
+    {
+      "metric": "monthly_cost_usd",
+      "operator": "MIN",
+      "weight": 0.3
+    },
+    {
+      "metric": "scalability",
+      "operator": "MAX",
+      "weight": 0.25
+    }
   ],
-  "components": ["api-gateway", "user", "catalog", "inventory", "order", "payment-mock", "postgres"],
+  "components": [
+    "sut-monolith",
+    "postgres"
+  ],
   "decisions": {
-    "cache": { "enabled": false, "targets": [] },
-    "messaging": { "enabled": false, "broker": "NONE" },
+    "cache": {
+      "enabled": false,
+      "targets": []
+    },
+    "messaging": {
+      "enabled": false,
+      "broker": "NONE"
+    },
     "scalingProfile": "SINGLE_INSTANCE",
     "communication": "IN_PROCESS"
   },
-  "assumptions": ["test"],
-  "rationale": ["test"]
+  "assumptions": [
+    "test"
+  ],
+  "rationale": [
+    "test"
+  ]
 }

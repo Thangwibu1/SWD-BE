@@ -1,0 +1,161 @@
+{
+  "studyId": "apikey-fan-6-models-volume-v1",
+  "orderSeed": 20261016,
+  "generationRepetitions": 6,
+  "requestTimeoutMs": 180000,
+  "intervalMs": 1500,
+  "models": [
+    {
+      "id": "claude",
+      "provider": "openai",
+      "model": "claude-sonnet-5-5",
+      "apiKeyEnv": "APIKEY_FAN_CLAUDE_KEY",
+      "baseUrl": "https://api.apikey.fan/v1",
+      "maxOutputTokens": 8192,
+      "sendMaxOutputTokens": false
+    },
+    {
+      "id": "codex",
+      "provider": "openai",
+      "model": "gpt-6.1-sol",
+      "apiKeyEnv": "APIKEY_FAN_CODEX_KEY",
+      "baseUrl": "https://api.apikey.fan/v1",
+      "maxOutputTokens": 8192,
+      "sendMaxOutputTokens": false
+    },
+    {
+      "id": "deepseek",
+      "provider": "openai",
+      "model": "deepseek-flash",
+      "apiKeyEnv": "APIKEY_FAN_DEEPSEEK_KEY",
+      "baseUrl": "https://api.apikey.fan/v1",
+      "maxOutputTokens": 8192,
+      "sendMaxOutputTokens": false
+    },
+    {
+      "id": "kimi",
+      "provider": "openai",
+      "model": "kimi-k2.6",
+      "apiKeyEnv": "APIKEY_FAN_KIMI_KEY",
+      "baseUrl": "https://api.apikey.fan/v1",
+      "maxOutputTokens": 8192,
+      "sendMaxOutputTokens": false
+    },
+    {
+      "id": "jev",
+      "provider": "openai",
+      "model": "jev-latest",
+      "apiKeyEnv": "APIKEY_FAN_JEV_KEY",
+      "baseUrl": "https://api.apikey.fan/v1",
+      "maxOutputTokens": 8192,
+      "sendMaxOutputTokens": false
+    },
+    {
+      "id": "glm",
+      "provider": "openai",
+      "model": "glm-5.3-flash",
+      "apiKeyEnv": "APIKEY_FAN_GLM_KEY",
+      "baseUrl": "https://api.apikey.fan/v1",
+      "maxOutputTokens": 8192,
+      "sendMaxOutputTokens": false
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "small-team",
+      "requirements": "Backend e-commerce cho nhóm 3 lập trình viên: đăng nhập, sản phẩm, giỏ hàng, checkout, xem và hủy đơn CONFIRMED. Ưu tiên đơn giản vận hành và ít thành phần, sau đó chi phí và hiệu năng. Không bắt buộc family, Redis hay queue; tự chọn và giải thích đánh đổi. Chấp nhận PostgreSQL dùng chung, không yêu cầu HA.",
+      "workloadProfile": "MIXED_V1",
+      "expected": "supported"
+    },
+    {
+      "id": "browsing-product-cache",
+      "requirements": "Cửa hàng có workload duyệt sản phẩm chiếm ưu thế. Bắt buộc Redis chỉ cache product TTL 60 giây; cart lưu PostgreSQL, không Redis cart. Tự chọn family và topology. Giải thích cache invalidation và không hứa đạt SLO trước benchmark.",
+      "workloadProfile": "BROWSING_V1",
+      "expected": "supported",
+      "constraints": { "cacheTargets": ["product"] }
+    },
+    {
+      "id": "shared-redis-cart",
+      "requirements": "Bắt buộc giỏ hàng lưu Redis dùng chung; không cache sản phẩm. Tự chọn family và topology. Redis chỉ là cart storage, không queue, lock hay session store. Dữ liệu nghiệp vụ còn lại lưu PostgreSQL. Giải thích đánh đổi khi Redis single instance lỗi.",
+      "workloadProfile": "MIXED_V1",
+      "expected": "supported",
+      "constraints": { "cacheTargets": ["cart"] }
+    },
+    {
+      "id": "sync-no-redis",
+      "requirements": "Bắt buộc checkout đồng bộ, không dùng broker, không dùng Redis. Cart lưu PostgreSQL, thanh toán mock có idempotency bền vững. Tự chọn family và số replica trong catalog. Ưu tiên ít chi phí vận hành.",
+      "workloadProfile": "CHECKOUT_V1",
+      "expected": "supported",
+      "constraints": { "broker": "NONE", "cacheTargets": [] }
+    },
+    {
+      "id": "postgres-checkout-queue",
+      "requirements": "Bắt buộc modular monolith với checkout async qua PostgreSQL job queue, không RabbitMQ. Chấp nhận HTTP 202 và polling trạng thái cuối. Tự chọn Redis, số API và worker có sẵn. Giải thích lease, retry và idempotency; không coi latency HTTP acceptance là latency hoàn tất đơn.",
+      "workloadProfile": "CHECKOUT_V1",
+      "expected": "supported",
+      "constraints": { "family": "MODULAR_MONOLITH", "broker": "POSTGRES" }
+    },
+    {
+      "id": "dual-api-dual-worker",
+      "requirements": "Bắt buộc PostgreSQL checkout queue, 2 API process và 2 pg-queue worker theo scaling profile QUEUE_DUAL_WORKER. Không Redis; cart dùng chung PostgreSQL. Không autoscaling hoặc HA. Giải thích ngân sách tài nguyên cố định và overhead proxy/worker.",
+      "workloadProfile": "CHECKOUT_V1",
+      "expected": "supported",
+      "constraints": {
+        "broker": "POSTGRES",
+        "scalingProfile": "QUEUE_DUAL_WORKER",
+        "cacheTargets": []
+      }
+    },
+    {
+      "id": "rest-services",
+      "requirements": "Bắt buộc REST_MICROSERVICES với giao tiếp HTTP JSON và checkout đồng bộ không broker. Các service chia sẻ một PostgreSQL. Redis tùy chọn. Chỉ dùng các service nghiệp vụ có sẵn. Giải thích overhead giao tiếp và vận hành trong giới hạn 2 vCPU.",
+      "workloadProfile": "MIXED_V1",
+      "expected": "supported",
+      "constraints": { "family": "REST_MICROSERVICES", "broker": "NONE" }
+    },
+    {
+      "id": "rabbitmq-events",
+      "requirements": "Bắt buộc EVENT_DRIVEN_MICROSERVICES với RabbitMQ AMQP và checkout bất đồng bộ. Redis tùy chọn. Không Kafka hoặc Redis queue. Chấp nhận HTTP 202 và polling, dùng durable outbox/inbox. Giải thích overhead broker và thời gian hoàn tất nghiệp vụ.",
+      "workloadProfile": "CHECKOUT_V1",
+      "expected": "supported",
+      "constraints": { "family": "EVENT_DRIVEN_MICROSERVICES", "broker": "RABBITMQ" }
+    },
+    {
+      "id": "flash-sale",
+      "requirements": "Flash sale nhiều checkout tranh cùng sản phẩm, phải không overselling và không tạo nhiều đơn khi retry cùng idempotency key. Bắt buộc Redis cho cả product cache TTL 60 giây và cart storage; family, broker và replica tự chọn từ catalog. Không tuyên bố đã chịu được tải khi chưa đo.",
+      "workloadProfile": "FLASH_SALE_V1",
+      "expected": "supported",
+      "constraints": { "cacheTargets": ["product", "cart"] }
+    },
+    {
+      "id": "unsupported-kafka",
+      "requirements": "Bắt buộc Apache Kafka làm broker checkout và event streaming. Không được thay bằng RabbitMQ, PostgreSQL queue hoặc bỏ broker. Các chức năng e-commerce khác giữ nguyên.",
+      "workloadProfile": "CHECKOUT_V1",
+      "expected": "unsupported"
+    },
+    {
+      "id": "unsupported-ha",
+      "requirements": "Bắt buộc PostgreSQL HA nhiều node, Redis Cluster và Kubernetes HPA tự động tăng replica theo CPU. Đây là yêu cầu bắt buộc, không chấp nhận single instance hoặc replica cố định.",
+      "workloadProfile": "MIXED_V1",
+      "expected": "unsupported"
+    },
+    {
+      "id": "unsupported-database-per-service",
+      "requirements": "Bắt buộc microservices với database riêng cho từng service, MongoDB cho catalog và MySQL cho order. Không chấp nhận PostgreSQL database dùng chung và không được xấp xỉ bằng profile gần nhất.",
+      "workloadProfile": "MIXED_V1",
+      "expected": "unsupported"
+    }
+  ],
+  "benchmark": {
+    "datasetProfile": "capacity",
+    "requestVolumes": [10000, 100000, 500000],
+    "repetitions": 3,
+    "warmupSeconds": 30,
+    "measureSeconds": 600,
+    "cooldownSeconds": 15,
+    "invalidRetryLimit": 1,
+    "costCatalogVersion": "research-v1",
+    "scoreBoundsVersion": "development-v1",
+    "slo": { "p99Ms": 100, "errorRateMax": 0.01, "consistencyViolationsMax": 0 }
+  }
+}

@@ -102,6 +102,7 @@ export function buildReport(
     architectureId: string;
     workload: string;
     loadRps: number;
+    targetOperations?: number | null;
     scoreBoundsVersion?: string;
     protocolVersion?: string | null;
     metrics: Record<string, unknown>;
@@ -155,6 +156,7 @@ export function buildReport(
     <p><strong>Architecture:</strong> ${escapeHtml(data.architectureId)}</p>
     <p><strong>Workload:</strong> ${escapeHtml(data.workload)}</p>
     <p><strong>Load:</strong> ${data.loadRps} RPS</p>
+    ${data.targetOperations ? `<p><strong>Target business operations:</strong> ${data.targetOperations}</p>` : ''}
     <p><strong>Protocol:</strong> ${escapeHtml(data.protocolVersion ?? 'manual')}</p>
     <p><strong>Score bounds:</strong> ${escapeHtml(data.scoreBoundsVersion ?? 'unspecified')}</p>
     <p><strong>Generated:</strong> ${escapeHtml(data.generatedAt ?? new Date().toISOString())}</p>
@@ -193,6 +195,7 @@ export function buildReport(
     data.architectureId,
     data.workload,
     data.loadRps,
+    data.targetOperations ?? '',
     JSON.stringify(data.metrics),
   ].join(',');
   writeFileSync(path.join(runDir, 'comparison-row.csv'), csvRow);

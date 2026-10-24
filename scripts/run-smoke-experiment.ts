@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
+import { loadRegistry } from '../src/evaluator/registry/index.js';
+import { profileCandidate } from '../src/evaluator/registry/ai-contract.js';
 import crypto from 'node:crypto';
 import { getEvaluatorDb } from '../src/metadata/sqlite.js';
 import { WorkerLoop } from '../src/worker/worker-loop.js';
@@ -19,7 +19,9 @@ async function main() {
   
   // 1. Create candidate
   const candidateId = crypto.randomUUID();
-  const candidateJson = JSON.parse(readFileSync(path.resolve(`tests/fixtures/candidate-${profileId}.json`), 'utf8'));
+  const profile = loadRegistry().get(profileId);
+  if (!profile) throw new Error(`Unknown architecture ${profileId}`);
+  const candidateJson = { ...profileCandidate(profile), candidateId: `smoke-${profileId}-${candidateId}` };
   
   db.prepare(`
     INSERT INTO candidates (id, candidate_id, raw_json, validation_status, architecture_id)

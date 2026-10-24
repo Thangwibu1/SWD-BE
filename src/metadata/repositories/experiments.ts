@@ -27,6 +27,7 @@ export interface RunRow {
   experiment_id: string;
   run_number: number;
   load_rps: number;
+  target_operations: number | null;
   state: string;
   lease_owner: string | null;
   lease_until: string | null;
@@ -54,7 +55,8 @@ export function insertExperiment(data: {
   name: string;
   candidateId: string;
   workloadProfile: string;
-  loadLevelsRps: number[];
+  loadLevelsRps?: number[];
+  requestVolumes?: number[];
   slo: { p99Ms: number; errorRateMax: number; consistencyViolationsMax?: number };
   costCatalogVersion: string;
   scoreBoundsVersion?: string;
@@ -77,20 +79,27 @@ export function insertExperiment(data: {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, data.name, data.candidateId, data.workloadProfile,
-    JSON.stringify(data.loadLevelsRps), JSON.stringify(data.slo),
+    JSON.stringify(data.loadLevelsRps ?? data.requestVolumes!.map((volume) => volume / (data.measureSeconds ?? 600))), JSON.stringify(data.slo),
     data.costCatalogVersion, data.scoreBoundsVersion ?? 'development-v1', data.protocolVersion ?? null,
     data.idempotencyKey ?? null, data.invalidRetryLimit ?? 1, data.datasetProfile ?? 'pilot', data.repetitions, 'PENDING',
     data.warmupSeconds ?? 120, data.measureSeconds ?? 600, data.cooldownSeconds ?? 60,
   );
 
-  // Create runs for each load level × repetition
-  for (const rps of data.loadLevelsRps) {
+  // Volume runs retain an equivalent offered RPS for legacy charts while
+  // target_operations remains the canonical tier identity.
+  const levels = data.requestVolumes
+    ? data.requestVolumes.map((operations) => ({
+        rps: operations / (data.measureSeconds ?? 600),
+        operations,
+      }))
+    : data.loadLevelsRps!.map((rps) => ({ rps, operations: null }));
+  for (const level of levels) {
     for (let rep = 1; rep <= data.repetitions; rep++) {
       const runId = crypto.randomUUID();
       db.prepare(`
-        INSERT INTO experiment_runs (id, experiment_id, run_number, load_rps, state)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(runId, id, rep, rps, 'PENDING');
+        INSERT INTO experiment_runs (id, experiment_id, run_number, load_rps, target_operations, state)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(runId, id, rep, level.rps, level.operations, 'PENDING');
     }
   }
 
@@ -165,7 +174,7 @@ export function listExperiments(
   const experiments = db.prepare(
     `SELECT e.*, c.architecture_id, c.model_name FROM experiments e
      JOIN candidates c ON c.id = e.candidate_id
-     ${where} ORDER BY e.created_at DESC LIMIT ? OFFSET ?`,
+     ${where} ORDER BY e.created_at DESC, e.id DESC LIMIT ? OFFSET ?`,
   ).all(...params, limit, offset) as ExperimentRow[];
 
   return { experiments, total };
@@ -196,7 +205,7 @@ export function getDashboardData(): DashboardData {
 
 export function getRunsByExperimentId(experimentId: string): RunRow[] {
   const db = getEvaluatorDb();
-  return db.prepare('SELECT * FROM experiment_runs WHERE experiment_id = ? ORDER BY load_rps, run_number').all(experimentId) as RunRow[];
+  return db.prepare('SELECT * FROM experiment_runs WHERE experiment_id = ? ORDER BY COALESCE(target_operations, load_rps), run_number').all(experimentId) as RunRow[];
 }
 
 export function getRunById(runId: string): RunRow | undefined {

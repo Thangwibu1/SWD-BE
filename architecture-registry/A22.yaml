@@ -1,0 +1,33 @@
+id: A22
+family: MODULAR_MONOLITH
+composeTemplate: infra/sut-templates/matrix-a22.compose.yaml
+cache:
+  enabled: false
+  targets: []
+messaging:
+  enabled: false
+  broker: NONE
+scalingProfile: DUAL_APP_PROXY_ASYNC
+communication: IN_PROCESS
+resourceProfile: matrix_a22_v1
+allowedRoles:
+  - api-gateway
+  - sut-monolith
+  - notification-mock
+  - postgres
+resources:
+  api-gateway:
+    cpus: 0.2
+    memoryMiB: 256
+  sut-monolith:
+    cpus: 0.5
+    memoryMiB: 896
+  sut-monolith-2:
+    cpus: 0.5
+    memoryMiB: 896
+  notification-mock:
+    cpus: 0.1
+    memoryMiB: 128
+  postgres:
+    cpus: 0.4
+    memoryMiB: 1152

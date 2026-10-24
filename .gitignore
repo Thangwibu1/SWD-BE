@@ -3,6 +3,7 @@ dist/
 coverage/
 data/
 .env
+experiments/ai-batch/keys.env
 infra/deploy/deploy.env
 infra/deploy/secrets/
 results/*

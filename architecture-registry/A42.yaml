@@ -1,0 +1,35 @@
+id: A42
+family: MODULAR_MONOLITH
+composeTemplate: infra/sut-templates/matrix-a42.compose.yaml
+cache:
+  enabled: true
+  targets:
+    - cart
+messaging:
+  enabled: true
+  broker: POSTGRES
+scalingProfile: QUEUE_SINGLE_API
+communication: POSTGRES_QUEUE
+resourceProfile: matrix_a42_v1
+allowedRoles:
+  - api-gateway
+  - sut-monolith
+  - postgres
+  - pg-queue-worker
+  - redis
+resources:
+  app:
+    cpus: 0.1
+    memoryMiB: 192
+  postgres:
+    cpus: 0.8
+    memoryMiB: 1536
+  sut-monolith:
+    cpus: 0.6
+    memoryMiB: 1280
+  pg-queue-worker:
+    cpus: 0.3
+    memoryMiB: 384
+  redis:
+    cpus: 0.1
+    memoryMiB: 128

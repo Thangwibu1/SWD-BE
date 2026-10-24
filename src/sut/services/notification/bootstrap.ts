@@ -1,3 +1,4 @@
+import { loadRegistry } from '../../../evaluator/registry/index.js';
 import type { AppConfig } from '../../../config/env.js';
 import { loadSutConfig } from '../../../config/sut-env.js';
 import type { Logger } from '../../../utils/logger.js';
@@ -7,11 +8,12 @@ import { RabbitMQClient } from '../../shared/events/rabbitmq.js';
 import { Database } from '../../shared/database/db.js';
 import { createPool } from '../../shared/database/pool.js';
 
-const EVENT_DRIVEN_ARCHITECTURES = new Set(['A09', 'A10', 'A11', 'A12']);
 
 export async function bootstrapNotificationMock(_appConfig: AppConfig, logger: Logger): Promise<void> {
   const config = loadSutConfig();
   const archId = config.ARCHITECTURE_ID;
+  const profile = loadRegistry().get(archId);
+  if (!profile) throw new Error(`Unknown architecture ${archId}`);
   logger.info({ architectureId: archId }, 'Bootstrapping Notification Mock');
 
   const app = createSutApp(logger);
@@ -36,7 +38,7 @@ export async function bootstrapNotificationMock(_appConfig: AppConfig, logger: L
 
   let rabbitmq: RabbitMQClient | undefined;
   let pool: ReturnType<typeof createPool> | undefined;
-  if (EVENT_DRIVEN_ARCHITECTURES.has(archId)) {
+  if (profile.messaging.broker === 'RABBITMQ') {
     const rmqUrl = process.env.RABBITMQ_URL || 'amqp://localhost';
     pool = createPool({ connectionString: config.DATABASE_URL, max: config.DB_POOL_MAX, applicationName: `notification-${archId}` });
     rabbitmq = new RabbitMQClient(rmqUrl, logger, new Database(pool));

@@ -37,6 +37,8 @@ export interface MetricValues {
   minimumSampleCount?: number;
   offeredRps?: number;
   achievedOperationRps?: number;
+  targetOperations?: number;
+  completedOperations?: number;
 }
 
 export interface NormalizationBounds {
@@ -131,6 +133,17 @@ export function checkGates(
     message: `Dropped iterations: ${metrics.droppedIterations}`,
   });
 
+  if (metrics.targetOperations !== undefined) {
+    const completed = metrics.completedOperations ?? 0;
+    gates.push({
+      code: 'GATE_OPERATION_VOLUME',
+      passed: completed >= metrics.targetOperations,
+      observed: completed,
+      threshold: metrics.targetOperations,
+      message: `Completed business operations ${completed} vs target ${metrics.targetOperations}`,
+    });
+  }
+
   const minimumAchievedRatio = 0.95;
   const achievedRatio = metrics.offeredRps && metrics.achievedOperationRps !== undefined
     ? metrics.achievedOperationRps / metrics.offeredRps
@@ -163,14 +176,20 @@ export function checkGates(
 
   // Gate 6: Measurement validity
   const minimumDuration = (metrics.expectedMeasurementDurationSeconds ?? 0) * 0.95;
+  // k6 permits in-flight iterations to finish (default graceful stop: 30s).
+  // Allow another 30s for process startup/export; a suspended host must not
+  // produce apparently valid evidence for a different measurement window.
+  const maximumDuration = metrics.expectedMeasurementDurationSeconds === undefined
+    ? Infinity : metrics.expectedMeasurementDurationSeconds + 60;
   const minimumSamples = metrics.minimumSampleCount ?? 1;
   gates.push({
     code: 'GATE_MEASUREMENT_VALID',
     passed: metrics.metricCoveragePercent >= 95
       && metrics.measurementDurationSeconds >= minimumDuration
+      && metrics.measurementDurationSeconds <= maximumDuration
       && metrics.sampleCount >= minimumSamples,
     observed: `coverage=${metrics.metricCoveragePercent.toFixed(1)}%, duration=${metrics.measurementDurationSeconds.toFixed(1)}s, samples=${metrics.sampleCount}`,
-    threshold: `coverage>=95%, duration>=${minimumDuration.toFixed(1)}s, samples>=${minimumSamples}`,
+    threshold: `coverage>=95%, duration=${minimumDuration.toFixed(1)}..${maximumDuration.toFixed(1)}s, samples>=${minimumSamples}`,
     message: `Metric coverage: ${metrics.metricCoveragePercent.toFixed(1)}%, duration: ${metrics.measurementDurationSeconds.toFixed(1)}s, samples: ${metrics.sampleCount}`,
   });
 
@@ -298,6 +317,8 @@ export function computeGates(
     minimumSampleCount?: number;
     offeredRps?: number;
     achievedOperationRps?: number;
+    targetOperations?: number;
+    completedOperations?: number;
   } = {},
 ): GatesOutput {
   const criticalViolations = oracleResult.violations.filter(
@@ -316,6 +337,8 @@ export function computeGates(
     loadHostCpuPercent: validity.loadHostCpuPercent ?? 100,
     ...(validity.offeredRps !== undefined ? { offeredRps: validity.offeredRps } : {}),
     ...(validity.achievedOperationRps !== undefined ? { achievedOperationRps: validity.achievedOperationRps } : {}),
+    ...(validity.targetOperations !== undefined ? { targetOperations: validity.targetOperations } : {}),
+    ...(validity.completedOperations !== undefined ? { completedOperations: validity.completedOperations } : {}),
     ...(validity.expectedMeasurementDurationSeconds !== undefined
       ? { expectedMeasurementDurationSeconds: validity.expectedMeasurementDurationSeconds }
       : {}),

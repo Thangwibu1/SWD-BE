@@ -28,14 +28,14 @@ export function createRestSaga(db: Database, dependencies: RestSagaDependencies)
     },
   });
 
-  async function run(orderId: string, cancelling = false): Promise<void> {
+  async function run(orderId: string, cancelling = false): Promise<boolean> {
     const client = await db.pool.connect();
     let locked = false;
     let destroyed = false;
     try {
       const lock = await client.query<{ locked: boolean }>('SELECT pg_try_advisory_lock(hashtextextended($1,2)) AS locked', [orderId]);
       locked = lock.rows[0]!.locked;
-      if (!locked) throw new DomainError('DEPENDENCY_UNAVAILABLE');
+      if (!locked) return false;
       const found = await client.query<SagaRow>('SELECT request,stage,failure_code FROM reliability.rest_sagas WHERE order_id=$1', [orderId]);
       const saga = found.rows[0];
       if (!saga) throw new DomainError('ORDER_NOT_FOUND');
@@ -92,6 +92,7 @@ export function createRestSaga(db: Database, dependencies: RestSagaDependencies)
         await finish('CANCELLED', 'REFUNDED', 'CANCELLED');
       }
       if (saga.stage === 'FAILED') throw new DomainError(saga.failure_code ?? 'PAYMENT_DECLINED');
+      return true;
     } finally {
       if (locked) {
         try { await client.query('SELECT pg_advisory_unlock(hashtextextended($1,2))', [orderId]); }
@@ -101,16 +102,26 @@ export function createRestSaga(db: Database, dependencies: RestSagaDependencies)
     }
   }
 
+  // A recovery loop or another replica can already own the same order. Release
+  // the connection between attempts so waiters cannot exhaust the owner's pool.
+  async function runForeground(orderId: string, cancelling = false): Promise<void> {
+    const deadline = Date.now() + 10_000;
+    while (!(await run(orderId, cancelling))) {
+      if (Date.now() >= deadline) throw new DomainError('DEPENDENCY_UNAVAILABLE');
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  }
+
   return {
     get: orders.get, listByUser: orders.listByUser,
     async checkout(key, request) {
       const pending = await orders.checkout(key, request);
       const saved = await db.query<SagaRow>('saga.request', 'SELECT request FROM reliability.rest_sagas WHERE order_id=$1', [pending.order.id]);
       if (saved.rows[0]?.request.paymentMode !== request.paymentMode) throw new DomainError('IDEMPOTENCY_KEY_CONFLICT');
-      await run(pending.order.id);
+      await runForeground(pending.order.id);
       return { order: await orders.get(pending.order.id), outcome: 'completed', replayed: pending.replayed };
     },
-    async cancel(id) { await run(id, true); return orders.get(id); },
+    async cancel(id) { await runForeground(id, true); return orders.get(id); },
     async recover() {
       const pending = await db.query<{ order_id: string }>('saga.pending', `SELECT order_id FROM reliability.rest_sagas
         WHERE stage NOT IN ('DONE','FAILED','CANCELLED') ORDER BY updated_at LIMIT 20`);

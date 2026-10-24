@@ -24,7 +24,7 @@
     },
     "architectureId": {
       "type": "string",
-      "pattern": "^A(0[1-9]|1[0-2])$"
+      "pattern": "^A\\d{2}$"
     },
     "architectureFamily": {
       "type": "string",
@@ -40,7 +40,11 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["metric", "operator", "weight"],
+        "required": [
+          "metric",
+          "operator",
+          "weight"
+        ],
         "properties": {
           "metric": {
             "type": "string",
@@ -56,7 +60,12 @@
           },
           "operator": {
             "type": "string",
-            "enum": ["LTE", "GTE", "MIN", "MAX"]
+            "enum": [
+              "LTE",
+              "GTE",
+              "MIN",
+              "MAX"
+            ]
           },
           "target": {
             "type": "number"
@@ -78,28 +87,58 @@
     "decisions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["cache", "messaging", "scalingProfile", "communication"],
+      "required": [
+        "cache",
+        "messaging",
+        "scalingProfile",
+        "communication"
+      ],
       "properties": {
         "cache": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["enabled", "targets"],
+          "required": [
+            "enabled",
+            "targets"
+          ],
           "properties": {
-            "enabled": { "type": "boolean" },
+            "enabled": {
+              "type": "boolean"
+            },
             "targets": {
               "type": "array",
-              "items": { "type": "string", "enum": ["product", "cart"] }
+              "items": {
+                "type": "string",
+                "enum": [
+                  "product",
+                  "cart"
+                ]
+              }
             },
-            "ttlSeconds": { "type": "integer" }
+            "ttlSeconds": {
+              "type": "integer"
+            }
           }
         },
         "messaging": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["enabled", "broker"],
+          "required": [
+            "enabled",
+            "broker"
+          ],
           "properties": {
-            "enabled": { "type": "boolean" },
-            "broker": { "type": "string", "enum": ["NONE", "RABBITMQ"] }
+            "enabled": {
+              "type": "boolean"
+            },
+            "broker": {
+              "type": "string",
+              "enum": [
+                "NONE",
+                "RABBITMQ",
+                "POSTGRES"
+              ]
+            }
           }
         },
         "scalingProfile": {
@@ -110,12 +149,21 @@
             "ONE_PER_SERVICE",
             "CATALOG_SCALED",
             "ORDER_SCALED",
-            "DUAL_APP_PROXY_ASYNC"
+            "DUAL_APP_PROXY_ASYNC",
+            "QUEUE_SINGLE_API",
+            "QUEUE_DUAL_API",
+            "QUEUE_DUAL_WORKER",
+            "QUEUE_SINGLE_API_DUAL_WORKER"
           ]
         },
         "communication": {
           "type": "string",
-          "enum": ["IN_PROCESS", "HTTP_JSON", "AMQP_EVENT"]
+          "enum": [
+            "IN_PROCESS",
+            "HTTP_JSON",
+            "AMQP_EVENT",
+            "POSTGRES_QUEUE"
+          ]
         }
       }
     },
